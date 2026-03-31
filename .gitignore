@@ -33,5 +33,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# local DB
-mnt/user-data/db.json
+# local DB and data
+/mnt/
