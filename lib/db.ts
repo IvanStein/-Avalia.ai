@@ -2,8 +2,17 @@ import fs from 'fs';
 import path from 'path';
 import { Pool } from 'pg';
 
+let connectionString = process.env.POSTGRES_URL;
+if (connectionString) {
+  try {
+    const url = new URL(connectionString);
+    url.searchParams.delete('sslmode');
+    connectionString = url.toString();
+  } catch (e) {}
+}
+
 const pool = new Pool({ 
-  connectionString: process.env.POSTGRES_URL,
+  connectionString,
   ssl: { rejectUnauthorized: false }
 });
 
@@ -26,17 +35,22 @@ const INITIAL_DB: any = {
   submissions:     [],
 };
 
+let initPromise: Promise<void> | null = null;
 async function initPostgres() {
-  try {
-    await sql`CREATE TABLE IF NOT EXISTS subjects (id TEXT PRIMARY KEY, name TEXT, code TEXT, syllabus TEXT)`;
-    await sql`CREATE TABLE IF NOT EXISTS students (id TEXT PRIMARY KEY, name TEXT, email TEXT)`;
-    await sql`CREATE TABLE IF NOT EXISTS activities (id TEXT PRIMARY KEY, subject_id TEXT, title TEXT, weight FLOAT, description TEXT)`;
-    await sql`CREATE TABLE IF NOT EXISTS turmas (id TEXT PRIMARY KEY, name TEXT, student_ids TEXT)`;
-    await sql`CREATE TABLE IF NOT EXISTS implementacoes (id TEXT PRIMARY KEY, title TEXT, description TEXT, status TEXT, priority TEXT, created_at TEXT)`;
-    await sql`CREATE TABLE IF NOT EXISTS submissions (id TEXT PRIMARY KEY, student_name TEXT, subject TEXT, status TEXT, grade FLOAT, feedback TEXT, source TEXT, submitted_at TEXT)`;
-  } catch (e) {
-    console.error('Erro ao inicializar Postgres:', e);
-  }
+  if (initPromise) return initPromise;
+  initPromise = (async () => {
+    try {
+      await sql`CREATE TABLE IF NOT EXISTS subjects (id TEXT PRIMARY KEY, name TEXT, code TEXT, syllabus TEXT)`;
+      await sql`CREATE TABLE IF NOT EXISTS students (id TEXT PRIMARY KEY, name TEXT, email TEXT)`;
+      await sql`CREATE TABLE IF NOT EXISTS activities (id TEXT PRIMARY KEY, subject_id TEXT, title TEXT, weight FLOAT, description TEXT)`;
+      await sql`CREATE TABLE IF NOT EXISTS turmas (id TEXT PRIMARY KEY, name TEXT, student_ids TEXT)`;
+      await sql`CREATE TABLE IF NOT EXISTS implementacoes (id TEXT PRIMARY KEY, title TEXT, description TEXT, status TEXT, priority TEXT, created_at TEXT)`;
+      await sql`CREATE TABLE IF NOT EXISTS submissions (id TEXT PRIMARY KEY, student_name TEXT, subject TEXT, status TEXT, grade FLOAT, feedback TEXT, source TEXT, submitted_at TEXT)`;
+    } catch (e) {
+      console.error('Erro ao inicializar Postgres:', e);
+    }
+  })();
+  return initPromise;
 }
 
 function readDB(): any {
