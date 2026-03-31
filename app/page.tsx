@@ -62,17 +62,67 @@ export default function Dashboard() {
   const handleDriveSubmit = async () => {
     if (!driveUrl || !studentName) return;
     setUploading(true);
-    await new Promise(r => setTimeout(r, 1500));
-    const newSub: Submission = {
-      id: Date.now().toString(),
-      studentName,
-      subject,
-      submittedAt: new Date().toISOString().split("T")[0],
-      status: "pending",
-      source: "drive",
-    };
-    setSubmissions(prev => [newSub, ...prev]);
-    setDriveUrl(""); setStudentName(""); setUploading(false); setShowUpload(false);
+    try {
+      const formData = new FormData();
+      formData.append("studentName", studentName);
+      formData.append("subject", subject);
+      formData.append("driveUrl", driveUrl);
+
+      const res = await fetch("/api/grading", { method: "POST", body: formData });
+      const data = await res.json();
+      
+      if (data.error) throw new Error(data.error);
+
+      const newSub: Submission = {
+        id: Date.now().toString(),
+        studentName,
+        subject,
+        submittedAt: new Date().toISOString().split("T")[0],
+        status: "graded",
+        source: "drive",
+        grade: data.grade,
+        feedback: data.feedback
+      };
+      setSubmissions(prev => [newSub, ...prev]);
+      setDriveUrl(""); setStudentName(""); setShowUpload(false);
+    } catch (err) {
+      alert("Erro no envio: " + (err as any).message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    if (!studentName) return alert("Digite o nome do aluno primeiro");
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("studentName", studentName);
+      formData.append("subject", subject);
+      formData.append("file", file);
+
+      const res = await fetch("/api/grading", { method: "POST", body: formData });
+      const data = await res.json();
+      
+      if (data.error) throw new Error(data.error);
+
+      const newSub: Submission = {
+        id: Date.now().toString(),
+        studentName,
+        subject,
+        submittedAt: new Date().toISOString().split("T")[0],
+        status: "graded",
+        source: "pdf",
+        grade: data.grade,
+        feedback: data.feedback
+      };
+      setSubmissions(prev => [newSub, ...prev]);
+      setShowUpload(false);
+    } catch (err) {
+      alert("Erro no processamento: " + (err as any).message);
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -291,16 +341,18 @@ export default function Dashboard() {
           </div>
 
           {selected.status === "pending" && (
-            <button className="btn-primary full" onClick={() => {
+            <button className="btn-primary full" onClick={async () => {
               setSubmissions(prev => prev.map(s => s.id === selected.id ? { ...s, status: "grading" } : s));
               setSelected(prev => prev ? { ...prev, status: "grading" } : prev);
+              
+              // Em um cenário real com persistência, aqui chamaríamos um re-processamento
+              // Para UX, vamos apenas finalizar o estado
               setTimeout(() => {
-                const grade = +(7 + Math.random() * 3).toFixed(1);
-                setSubmissions(prev => prev.map(s => s.id === selected!.id ? { ...s, status: "graded", grade, feedback: "Análise pedagógica gerada pela AvalIA com suporte RAG." } : s));
-                setSelected(prev => prev ? { ...prev, status: "graded", grade, feedback: "Análise pedagógica gerada pela AvalIA com suporte RAG." } : prev);
-              }, 2500);
+                setSubmissions(prev => prev.map(s => s.id === selected!.id ? { ...s, status: "graded" } : s));
+                setSelected(prev => prev ? { ...prev, status: "graded" } : prev);
+              }, 1000);
             }}>
-              <Sparkles size={15} /> Avaliar com Inteligência
+              <Sparkles size={15} /> Finalizar Avaliação
             </button>
           )}
         </aside>
@@ -324,11 +376,23 @@ export default function Dashboard() {
               className={`drop-zone ${dragOver ? "drag-over" : ""}`}
               onDragOver={e => { e.preventDefault(); setDragOver(true); }}
               onDragLeave={() => setDragOver(false)}
-              onDrop={e => { e.preventDefault(); setDragOver(false); }}
+              onDrop={e => { 
+                e.preventDefault(); 
+                setDragOver(false);
+                const file = e.dataTransfer.files[0];
+                if (file) handleFileUpload(file);
+              }}
+              onClick={() => document.getElementById("file-input")?.click()}
             >
               <Upload size={24} />
-              <p>Arraste um PDF aqui ou clique para selecionar</p>
-              <input type="file" accept=".pdf" style={{ display: "none" }} />
+              <p>{uploading ? "Processando..." : "Arraste um PDF aqui ou clique para selecionar"}</p>
+              <input 
+                id="file-input"
+                type="file" 
+                accept=".pdf" 
+                style={{ display: "none" }} 
+                onChange={e => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
+              />
             </div>
 
             <div className="divider"><span>ou via Google Drive</span></div>

@@ -25,19 +25,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Nenhum arquivo ou URL do Drive fornecido" }, { status: 400 });
     }
 
-    // 2. RAG: Buscar referências no ChromaDB
-    const collection = await chroma.getOrCreateCollection({ name: `subject_${subject.replace(/\s/g, "_").toLowerCase()}` });
-    const embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
-    
-    const embeddingResult = await embeddingModel.embedContent(studentText.slice(0, 2000));
-    const queryEmbedding = embeddingResult.embedding.values;
+    // 2. RAG: Buscar referências no ChromaDB (Opcional)
+    let referenceContext = "Nenhum material de referência disponível (ChromaDB offline).";
+    try {
+      const collection = await chroma.getOrCreateCollection({ name: `subject_${subject.replace(/\s/g, "_").toLowerCase()}` });
+      const embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
+      
+      const embeddingResult = await embeddingModel.embedContent(studentText.slice(0, 2000));
+      const queryEmbedding = embeddingResult.embedding.values;
 
-    const results = await collection.query({
-      queryEmbeddings: [queryEmbedding],
-      nResults: 5,
-    });
+      const results = await collection.query({
+        queryEmbeddings: [queryEmbedding],
+        nResults: 5,
+      });
 
-    const referenceContext = results.documents[0]?.join("\n\n") || "Nenhum material de referência disponível.";
+      if (results.documents[0]?.length > 0) {
+        referenceContext = results.documents[0].join("\n\n");
+      }
+    } catch (e) {
+      console.warn("ChromaDB connection failed, proceeding without RAG context.");
+    }
 
     // 3. Executar Skill de Avaliação Dissertativa
     const parsed = await runSkill(SKILLS.GRADE_DISSERTATIVE, {
