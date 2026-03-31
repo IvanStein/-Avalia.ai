@@ -13,6 +13,7 @@
     "@google/generative-ai": "^0.15.0",
     "@vercel/postgres": "^0.10.0",
     "chromadb": "^1.8.1",
+    "dotenv": "^17.3.1",
     "lucide-react": "^0.400.0",
     "next": "14.2.5",
     "pdf-parse": "^1.1.1",

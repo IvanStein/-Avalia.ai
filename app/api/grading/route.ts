@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Nenhum arquivo ou URL do Drive fornecido" }, { status: 400 });
     }
 
-    // 3. Executar Skill de Avaliação Dissertativa com Triple Context
+    // 4. Executar Skill de Avaliação Dissertativa com Triple Context
     const parsed = await runSkill(SKILLS.GRADE_DISSERTATIVE, {
       student_name: studentName,
       subject,
@@ -46,15 +46,18 @@ export async function POST(req: NextRequest) {
       rag_context: pedagogicalContext,
     });
 
-    return NextResponse.json({
+    // 5. Salvar no Banco (Persistência Automática)
+    const newSubmission = await db.addSubmission({
       studentName,
       subject,
+      status: "graded",
       grade: parsed.grade,
       feedback: parsed.feedback,
-      strengths: parsed.strengths,
-      improvements: parsed.improvements,
-      gradedAt: new Date().toISOString(),
-    });
+      source: file ? "pdf" : "drive",
+      submittedAt: new Date().toISOString().split("T")[0]
+    }, mode);
+
+    return NextResponse.json(newSubmission);
 
   } catch (error: any) {
     console.error("Erro na avaliação AvalIA:", error);
