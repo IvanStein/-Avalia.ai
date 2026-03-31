@@ -93,7 +93,8 @@ export async function POST(req: NextRequest) {
     //   items[1][studentName], ...
     const itemMap: Record<number, Partial<BatchItem & { file: File }>> = {};
 
-    for (const [key, value] of formData.entries()) {
+    // Use Array.from to avoid TypeScript FormDataIterator downlevelIteration error
+    for (const [key, value] of Array.from(formData.entries())) {
       const match = key.match(/^items\[(\d+)\]\[(\w+)\]$/);
       if (!match) continue;
       const idx = parseInt(match[1]);
