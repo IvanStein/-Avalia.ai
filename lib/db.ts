@@ -46,6 +46,10 @@ async function initPostgres() {
       await sql`CREATE TABLE IF NOT EXISTS turmas (id TEXT PRIMARY KEY, name TEXT, student_ids TEXT)`;
       await sql`CREATE TABLE IF NOT EXISTS implementacoes (id TEXT PRIMARY KEY, title TEXT, description TEXT, status TEXT, priority TEXT, created_at TEXT)`;
       await sql`CREATE TABLE IF NOT EXISTS submissions (id TEXT PRIMARY KEY, student_name TEXT, subject TEXT, status TEXT, grade FLOAT, feedback TEXT, source TEXT, submitted_at TEXT)`;
+      await sql`CREATE TABLE IF NOT EXISTS error_logs (id TEXT PRIMARY KEY, message TEXT, details TEXT, mode TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`;
+      
+      // Cleanup logs older than 24 hours
+      await sql`DELETE FROM error_logs WHERE created_at < NOW() - INTERVAL '24 hours'`.catch(() => {});
     } catch (e) {
       console.error('Erro ao inicializar Postgres:', e);
     }
@@ -55,14 +59,21 @@ async function initPostgres() {
 
 function readDB(): any {
   console.log('📂 Lendo de: db.json (Local)');
-  if (!fs.existsSync(DB_FILE)) { saveDB(INITIAL_DB); return { ...INITIAL_DB }; }
+  if (!fs.existsSync(DB_FILE)) { saveDB(INITIAL_DB); return { ...INITIAL_DB, error_logs: [] }; }
   const stored = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
   // Ensure new collections exist for old data files
+  
+  // Cleanup local logs older than 24 hours
+  let logs = stored.error_logs || [];
+  const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  logs = logs.filter((l: any) => new Date(l.created_at).getTime() > oneDayAgo);
+  
   return {
     ...INITIAL_DB,
     ...stored,
     turmas:         stored.turmas         ?? [],
     implementacoes: stored.implementacoes ?? [],
+    error_logs:     logs,
   };
 }
 function saveDB(data: any) { fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2)); }
@@ -284,5 +295,30 @@ export const db = {
     const data = readDB();
     data.submissions = data.submissions.filter((s: any) => s.id !== id);
     saveDB(data); return { id };
+  },
+
+  // ── ERROR LOGS ──────────────────────────────────────────────────────────
+  getLogs: async (mode: 'local' | 'remote' = 'local') => {
+    if (mode === 'remote') {
+      await initPostgres();
+      const { rows } = await sql`SELECT * FROM error_logs ORDER BY created_at DESC`;
+      return rows;
+    }
+    return readDB().error_logs;
+  },
+  logError: async (message: string, details: string, mode: 'local' | 'remote' = 'local') => {
+    const id = 'log' + Date.now().toString();
+    const createdAt = new Date().toISOString();
+    try {
+      if (mode === 'remote') {
+        await sql`INSERT INTO error_logs (id, message, details, mode, created_at) VALUES (${id}, ${message}, ${details}, 'remote', ${createdAt})`;
+      } else {
+        const data = readDB();
+        data.error_logs.push({ id, message, details, mode: 'local', created_at: createdAt });
+        saveDB(data);
+      }
+    } catch(e) {
+      console.error('Falha ao gravar raw log:', e);
+    }
   },
 };

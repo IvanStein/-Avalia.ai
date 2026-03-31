@@ -4,16 +4,22 @@ import { db } from '@/lib/db';
 export async function GET(req: NextRequest) {
   const mode = (req.nextUrl.searchParams.get('mode') as 'local' | 'remote') || 'local';
 
-  const [subjects, students, activities, turmas, implementacoes, submissions] = await Promise.all([
-    db.getSubjects(mode),
-    db.getStudents(mode),
-    db.getActivities(mode),
-    db.getTurmas(mode),
-    db.getImplementacoes(mode),
-    db.getSubmissions(mode),
-  ]);
+  try {
+    const [subjects, students, activities, turmas, implementacoes, submissions] = await Promise.all([
+      db.getSubjects(mode),
+      db.getStudents(mode),
+      db.getActivities(mode),
+      db.getTurmas(mode),
+      db.getImplementacoes(mode),
+      db.getSubmissions(mode),
+    ]);
 
-  return NextResponse.json({ subjects, students, activities, turmas, implementacoes, submissions });
+    return NextResponse.json({ subjects, students, activities, turmas, implementacoes, submissions });
+  } catch (err: any) {
+    console.error('API GET DB Error:', err);
+    await db.logError(err?.message || 'Erro Desconhecido no GET Inicial', JSON.stringify({ stack: err?.stack, action: 'GET' }), mode);
+    return NextResponse.json({ error: err?.message || 'Erro interno do servidor' }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -56,6 +62,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error: any) {
+    await db.logError(error?.message || 'Erro Desconhecido no POST', JSON.stringify({ stack: error?.stack, action: 'POST' }), mode);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -79,6 +86,7 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error: any) {
+    await db.logError(error?.message || 'Erro Desconhecido no DELETE', JSON.stringify({ stack: error?.stack, action: 'DELETE' }), mode);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
