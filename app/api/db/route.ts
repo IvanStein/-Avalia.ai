@@ -2,10 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
 export async function GET() {
+  const [subjects, students, activities] = await Promise.all([
+    db.getSubjects(),
+    db.getStudents(),
+    db.getActivities(),
+  ]);
+
   return NextResponse.json({
-    subjects: db.getSubjects(),
-    students: db.getStudents(),
-    activities: db.getActivities(),
+    subjects,
+    students,
+    activities,
   });
 }
 
@@ -16,13 +22,13 @@ export async function POST(req: NextRequest) {
 
     switch (entity) {
       case 'subject':
-        result = db.addSubject(data.name, data.code);
+        result = await db.addSubject(data.name, data.code);
         break;
       case 'student':
-        result = db.addStudent(data.name, data.email);
+        result = await db.addStudent(data.name, data.email);
         break;
       case 'activity':
-        result = db.addActivity(data.subjectId, data.title, data.weight);
+        result = await db.addActivity(data.subjectId, data.title, data.weight);
         break;
       default:
         return NextResponse.json({ error: "Entidade inválida" }, { status: 400 });
