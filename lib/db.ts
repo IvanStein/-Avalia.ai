@@ -33,17 +33,17 @@ function readDB() {
 function saveDB(data: any) { fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2)); }
 
 export const db = {
-  getSubjects: async () => {
-    if (isPostgres) {
+  getSubjects: async (mode: "local" | "remote" = "local") => {
+    if (mode === "remote") {
       await initPostgres();
       const { rows } = await sql`SELECT * FROM subjects`;
       return rows;
     }
     return readDB().subjects;
   },
-  addSubject: async (name: string, code: string) => {
+  addSubject: async (name: string, code: string, mode: "local" | "remote" = "local") => {
     const id = Date.now().toString();
-    if (isPostgres) {
+    if (mode === "remote") {
       await sql`INSERT INTO subjects (id, name, code) VALUES (${id}, ${name}, ${code})`;
       return { id, name, code };
     }
@@ -54,16 +54,16 @@ export const db = {
     return newSub;
   },
   
-  getStudents: async () => {
-    if (isPostgres) {
+  getStudents: async (mode: "local" | "remote" = "local") => {
+    if (mode === "remote") {
       const { rows } = await sql`SELECT * FROM students`;
       return rows;
     }
     return readDB().students;
   },
-  addStudent: async (name: string, email: string) => {
+  addStudent: async (name: string, email: string, mode: "local" | "remote" = "local") => {
     const id = 's' + Date.now().toString();
-    if (isPostgres) {
+    if (mode === "remote") {
       await sql`INSERT INTO students (id, name, email) VALUES (${id}, ${name}, ${email})`;
       return { id, name, email };
     }
@@ -74,16 +74,16 @@ export const db = {
     return newStudent;
   },
 
-  getActivities: async () => {
-    if (isPostgres) {
+  getActivities: async (mode: "local" | "remote" = "local") => {
+    if (mode === "remote") {
       const { rows } = await sql`SELECT * FROM activities`;
       return rows.map(r => ({ ...r, subjectId: r.subject_id }));
     }
     return readDB().activities;
   },
-  addActivity: async (subjectId: string, title: string, weight: number) => {
+  addActivity: async (subjectId: string, title: string, weight: number, mode: "local" | "remote" = "local") => {
     const id = 'a' + Date.now().toString();
-    if (isPostgres) {
+    if (mode === "remote") {
       await sql`INSERT INTO activities (id, subject_id, title, weight) VALUES (${id}, ${subjectId}, ${title}, ${weight})`;
       return { id, subjectId, title, weight };
     }

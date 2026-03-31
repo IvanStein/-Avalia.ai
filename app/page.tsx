@@ -1,9 +1,7 @@
 "use client";
 
-import Head from "next/head";
-
 import { useState, useEffect } from "react";
-import { Upload, FileText, Link, BookOpen, CheckCircle, Clock, AlertCircle, ChevronRight, GraduationCap, Sparkles } from "lucide-react";
+import { Upload, FileText, Link, BookOpen, CheckCircle, Clock, ChevronRight, GraduationCap, Sparkles, Database, UserPlus, GraduationCap as SubjectIcon, Plus } from "lucide-react";
 
 interface Submission {
   id: string;
@@ -16,15 +14,6 @@ interface Submission {
   source: "pdf" | "drive";
 }
 
-const MOCK_SUBMISSIONS: Submission[] = [
-  { id: "1", studentName: "Ana Souza", subject: "Cálculo I", submittedAt: "2024-03-15", status: "graded", grade: 8.5, feedback: "Bom domínio dos conceitos de derivadas. Revisar integração por partes.", source: "pdf" },
-  { id: "2", studentName: "Bruno Lima", subject: "Física II", submittedAt: "2024-03-15", status: "graded", grade: 7.0, feedback: "Correto na teoria, mas cometeu erros de cálculo nas questões 3 e 4.", source: "drive" },
-  { id: "3", studentName: "Carla Mendes", subject: "Cálculo I", submittedAt: "2024-03-16", status: "grading", source: "pdf" },
-  { id: "4", studentName: "Diego Rocha", subject: "Física II", submittedAt: "2024-03-16", status: "pending", source: "drive" },
-  { id: "5", studentName: "Elena Costa", subject: "Cálculo I", submittedAt: "2024-03-16", status: "graded", grade: 9.2, feedback: "Excelente resolução. Demonstra compreensão profunda do tema.", source: "pdf" },
-  { id: "6", studentName: "Felipe Nunes", subject: "Física II", submittedAt: "2024-03-17", status: "error", source: "pdf" },
-];
-
 const STATUS_CONFIG = {
   pending: { label: "Aguardando", icon: Clock, color: "#f59e0b" },
   grading: { label: "Corrigindo...", icon: Sparkles, color: "#6366f1" },
@@ -32,70 +21,69 @@ const STATUS_CONFIG = {
   error: { label: "Erro", icon: AlertCircle, color: "#ef4444" },
 };
 
+import { AlertCircle } from "lucide-react";
+
 export default function Dashboard() {
-  const [submissions, setSubmissions] = useState<Submission[]>(MOCK_SUBMISSIONS);
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [selected, setSelected] = useState<Submission | null>(null);
-  const [activeSubject, setActiveSubject] = useState<string>("Todos");
   const [view, setView] = useState<"dashboard" | "subjects" | "students" | "activities">("dashboard");
   const [hasMounted, setHasMounted] = useState(false);
   const [dbData, setDbData] = useState<any>({ subjects: [], students: [], activities: [] });
-  const [showUpload, setShowUpload] = useState(false);
+  const [dbMode, setDbMode] = useState<"local" | "remote">("local");
   
-  useEffect(() => {
-    setHasMounted(true);
-    fetch('/api/db').then(r => r.json()).then(setDbData);
-  }, []);
+  // Modal states
+  const [showUpload, setShowUpload] = useState(false);
+  const [showSubjectModal, setShowSubjectModal] = useState(false);
+  const [showStudentModal, setShowStudentModal] = useState(false);
+  const [showActivityModal, setShowActivityModal] = useState(false);
+
+  // Form states
+  const [newSubData, setNewSubData] = useState({ name: "", code: "" });
+  const [newStuData, setNewStuData] = useState({ name: "", email: "" });
+  const [newActData, setNewActData] = useState({ subjectId: "", title: "", weight: 1 });
+  
   const [driveUrl, setDriveUrl] = useState("");
   const [studentName, setStudentName] = useState("");
-  const [subject, setSubject] = useState("Cálculo I");
+  const [subject, setSubject] = useState("");
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
-  const subjectsList = ["Todos", ...dbData.subjects.map((s: any) => s.name)];
-  const filtered = activeSubject === "Todos" ? submissions : submissions.filter(s => s.subject === activeSubject);
+  useEffect(() => {
+    setHasMounted(true);
+    fetchDB();
+  }, [dbMode]);
 
-  const stats = {
-    total: submissions.length,
-    graded: submissions.filter(s => s.status === "graded").length,
-    pending: submissions.filter(s => s.status === "pending").length,
-    avg: submissions.filter(s => s.grade).reduce((a, b) => a + (b.grade || 0), 0) / submissions.filter(s => s.grade).length,
+  const fetchDB = async () => {
+    try {
+      const res = await fetch(`/api/db?mode=${dbMode}`);
+      const data = await res.json();
+      setDbData(data);
+    } catch (e) {
+      console.error("Erro ao carregar banco:", e);
+    }
   };
 
-  const handleDriveSubmit = async () => {
-    if (!driveUrl || !studentName) return;
-    setUploading(true);
+  const handleAddEntity = async (entity: string, data: any) => {
     try {
-      const formData = new FormData();
-      formData.append("studentName", studentName);
-      formData.append("subject", subject);
-      formData.append("driveUrl", driveUrl);
-
-      const res = await fetch("/api/grading", { method: "POST", body: formData });
-      const data = await res.json();
-      
-      if (data.error) throw new Error(data.error);
-
-      const newSub: Submission = {
-        id: Date.now().toString(),
-        studentName,
-        subject,
-        submittedAt: new Date().toISOString().split("T")[0],
-        status: "graded",
-        source: "drive",
-        grade: data.grade,
-        feedback: data.feedback
-      };
-      setSubmissions(prev => [newSub, ...prev]);
-      setDriveUrl(""); setStudentName(""); setShowUpload(false);
-    } catch (err) {
-      alert("Erro no envio: " + (err as any).message);
-    } finally {
-      setUploading(false);
+      const res = await fetch(`/api/db?mode=${dbMode}`, {
+        method: "POST",
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entity, data })
+      });
+      if (res.ok) {
+        await fetchDB();
+        setShowSubjectModal(false); setShowStudentModal(false); setShowActivityModal(false);
+        setNewSubData({ name: "", code: "" });
+        setNewStuData({ name: "", email: "" });
+        setNewActData({ subjectId: "", title: "", weight: 1 });
+      }
+    } catch (e) {
+      alert("Erro ao cadastrar: " + e);
     }
   };
 
   const handleFileUpload = async (file: File) => {
-    if (!studentName) return alert("Digite o nome do aluno primeiro");
+    if (!studentName || !subject) return alert("Selecione aluno e matéria primeiro");
     setUploading(true);
     try {
       const formData = new FormData();
@@ -105,7 +93,6 @@ export default function Dashboard() {
 
       const res = await fetch("/api/grading", { method: "POST", body: formData });
       const data = await res.json();
-      
       if (data.error) throw new Error(data.error);
 
       const newSub: Submission = {
@@ -120,12 +107,14 @@ export default function Dashboard() {
       };
       setSubmissions(prev => [newSub, ...prev]);
       setShowUpload(false);
-    } catch (err) {
-      alert("Erro no processamento: " + (err as any).message);
+    } catch (err: any) {
+      alert("Erro no processamento: " + err.message);
     } finally {
       setUploading(false);
     }
   };
+
+  if (!hasMounted) return null;
 
   return (
     <div className="app">
@@ -137,39 +126,25 @@ export default function Dashboard() {
 
         <nav className="nav">
           <p className="nav-label">Visão Geral</p>
-          <button className={`nav-item ${view === "dashboard" ? "active" : ""}`} onClick={() => setView("dashboard")}>
-            <Clock size={15} /> Dashboard
-          </button>
+          <button className={`nav-item ${view === "dashboard" ? "active" : ""}`} onClick={() => setView("dashboard")}><BookOpen size={18} /> Dashboard</button>
           
-          <p className="nav-label" style={{ marginTop: '16px' }}>Gestão</p>
-          <button className={`nav-item ${view === "subjects" ? "active" : ""}`} onClick={() => setView("subjects")}>
-            <BookOpen size={15} /> Matérias
-          </button>
-          <button className={`nav-item ${view === "students" ? "active" : ""}`} onClick={() => setView("students")}>
-            <GraduationCap size={15} /> Alunos
-          </button>
-          <button className={`nav-item ${view === "activities" ? "active" : ""}`} onClick={() => setView("activities")}>
-            <FileText size={15} /> Atividades
-          </button>
+          <p className="nav-label">Gerenciamento</p>
+          <button className={`nav-item ${view === "subjects" ? "active" : ""}`} onClick={() => setView("subjects")}><Link size={18} /> Matérias</button>
+          <button className={`nav-item ${view === "students" ? "active" : ""}`} onClick={() => setView("students")}><CheckCircle size={18} /> Alunos</button>
+          <button className={`nav-item ${view === "activities" ? "active" : ""}`} onClick={() => setView("activities")}><Clock size={18} /> Atividades</button>
         </nav>
 
-        <div className="sidebar-stats">
-          <div className="stat-card">
-            <span className="stat-num">{stats.total}</span>
-            <span className="stat-label">Total</span>
+        <div className="db-toggle">
+          <p className="nav-label">Base de Dados</p>
+          <div className="toggle-group">
+            <button className={dbMode === "local" ? "active" : ""} onClick={() => setDbMode("local")}>
+              <Database size={12} style={{marginRight: 4}} /> Local
+            </button>
+            <button className={dbMode === "remote" ? "active" : ""} onClick={() => setDbMode("remote")}>
+              ☁️ Nuvem
+            </button>
           </div>
-          <div className="stat-card">
-            <span className="stat-num" style={{ color: "#10b981" }}>{stats.graded}</span>
-            <span className="stat-label">Corrigidos</span>
-          </div>
-          <div className="stat-card">
-            <span className="stat-num" style={{ color: "#f59e0b" }}>{stats.pending}</span>
-            <span className="stat-label">Pendentes</span>
-          </div>
-          <div className="stat-card">
-            <span className="stat-num" style={{ color: "#6366f1" }}>{stats.avg?.toFixed(1) || "—"}</span>
-            <span className="stat-label">Média</span>
-          </div>
+          {dbMode === "remote" && <p style={{fontSize: 9, color: '#10b981', marginTop: 4, textAlign: 'center'}}>Supabase Ativo</p>}
         </div>
       </aside>
 
@@ -178,11 +153,11 @@ export default function Dashboard() {
           <>
             <header className="header">
               <div>
-                <h1>Avaliações</h1>
-                <p className="subtitle">{filtered.length} trabalhos · {activeSubject}</p>
+                <h1>Painel de Avaliações</h1>
+                <p className="subtitle">Lendo de: <b style={{color: 'var(--accent)'}}>{dbMode === 'local' ? 'JSON Local' : 'Supabase Postgres'}</b></p>
               </div>
               <button className="btn-primary" onClick={() => setShowUpload(true)}>
-                <Upload size={16} /> Enviar Trabalho
+                <Upload size={18} /> Novo Trabalho
               </button>
             </header>
 
@@ -192,41 +167,28 @@ export default function Dashboard() {
                   <tr>
                     <th>Aluno</th>
                     <th>Matéria</th>
-                    <th>Envio</th>
-                    <th>Fonte</th>
                     <th>Status</th>
                     <th>Nota</th>
-                    <th></th>
+                    <th>Data</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(sub => {
-                    const cfg = STATUS_CONFIG[sub.status];
-                    const Icon = cfg.icon;
-                    return (
-                      <tr key={sub.id} className={selected?.id === sub.id ? "selected" : ""} onClick={() => setSelected(sub)}>
-                        <td className="td-name">{sub.studentName}</td>
-                        <td><span className="badge-subject">{sub.subject}</span></td>
-                        <td className="td-muted">{sub.submittedAt}</td>
-                        <td>
-                          {sub.source === "pdf"
-                            ? <span className="badge-source pdf"><FileText size={11} /> PDF</span>
-                            : <span className="badge-source drive"><Link size={11} /> Drive</span>
-                          }
-                        </td>
-                        <td>
-                          <span className="status-pill" style={{ color: cfg.color, background: cfg.color + "18" }}>
-                            <Icon size={12} className={sub.status === "grading" ? "spin" : ""} />
-                            {cfg.label}
-                          </span>
-                        </td>
-                        <td className="td-grade">
-                          {sub.grade != null ? <span className="grade">{sub.grade.toFixed(1)}</span> : <span className="td-muted">—</span>}
-                        </td>
-                        <td><ChevronRight size={15} className="td-muted" /></td>
-                      </tr>
-                    );
-                  })}
+                  {submissions.length === 0 ? (
+                    <tr><td colSpan={5} style={{textAlign: 'center', padding: 40, color: 'var(--text2)'}}>Nenhuma submissão recente.</td></tr>
+                  ) : submissions.map(sub => (
+                    <tr key={sub.id} onClick={() => setSelected(sub)} className={selected?.id === sub.id ? "selected" : ""}>
+                      <td className="td-name">{sub.studentName}</td>
+                      <td><span className="badge-subject">{sub.subject}</span></td>
+                      <td>
+                        {(() => {
+                          const conf = STATUS_CONFIG[sub.status];
+                          return <span className="status-pill" style={{ background: conf.color + "15", color: conf.color }}><conf.icon size={14} />{conf.label}</span>
+                        })()}
+                      </td>
+                      <td className="td-grade">{sub.grade ?? "-"}</td>
+                      <td className="td-muted">{sub.submittedAt}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -234,183 +196,159 @@ export default function Dashboard() {
         ) : view === "subjects" ? (
           <>
             <header className="header">
-               <div>
-                <h1>Gestão de Matérias</h1>
-                <p className="subtitle">{dbData.subjects.length} matérias cadastradas</p>
-               </div>
-               <button className="btn-primary" onClick={() => {
-                 const name = prompt("Nome da Matéria:");
-                 const code = prompt("Código (ex: MAT101):");
-                 if (name && code) {
-                    fetch('/api/db', { method: 'POST', body: JSON.stringify({ entity: 'subject', data: { name, code }}) })
-                    .then(r => r.json()).then(res => setDbData({ ...dbData, subjects: [...dbData.subjects, res] }));
-                 }
-               }}>
-                 <Sparkles size={16} /> Nova Matéria
-               </button>
+              <div><h1>Matérias</h1><p className="subtitle">{dbData.subjects.length} disciplinas configuradas</p></div>
+              <button className="btn-primary" onClick={() => setShowSubjectModal(true)}><Plus size={18} /> Nova Matéria</button>
             </header>
             <div className="table-wrap">
-               <table className="table">
-                  <thead><tr><th>ID</th><th>Nome</th><th>Código</th></tr></thead>
-                  <tbody>{dbData.subjects.map((sub: any) => (<tr key={sub.id}><td>{sub.id}</td><td>{sub.name}</td><td>{sub.code}</td></tr>))}</tbody>
-               </table>
+              <table className="table">
+                <thead><tr><th>Nome</th><th>Código</th></tr></thead>
+                <tbody>
+                  {dbData.subjects.map((s: any) => (
+                    <tr key={s.id}><td className="td-name">{s.name}</td><td className="td-muted">{s.code}</td></tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </>
         ) : view === "students" ? (
           <>
             <header className="header">
-               <div>
-                <h1>Gestão de Alunos</h1>
-                <p className="subtitle">{dbData.students.length} alunos cadastrados</p>
-               </div>
-               <button className="btn-primary" onClick={() => {
-                 const name = prompt("Nome completo:");
-                 const email = prompt("Email:");
-                 if (name && email) {
-                    fetch('/api/db', { method: 'POST', body: JSON.stringify({ entity: 'student', data: { name, email }}) })
-                    .then(r => r.json()).then(res => setDbData({ ...dbData, students: [...dbData.students, res] }));
-                 }
-               }}>
-                 <Sparkles size={16} /> Novo Aluno
-               </button>
+              <div><h1>Alunos</h1><p className="subtitle">{dbData.students.length} estudantes no banco</p></div>
+              <button className="btn-primary" onClick={() => setShowStudentModal(true)}><UserPlus size={18} /> Novo Aluno</button>
             </header>
             <div className="table-wrap">
-               <table className="table">
-                  <thead><tr><th>ID</th><th>Nome</th><th>Email</th></tr></thead>
-                  <tbody>{dbData.students.map((stu: any) => (<tr key={stu.id}><td>{stu.id}</td><td>{stu.name}</td><td>{stu.email}</td></tr>))}</tbody>
-               </table>
+              <table className="table">
+                <thead><tr><th>Nome</th><th>Email</th></tr></thead>
+                <tbody>
+                  {dbData.students.map((s: any) => (
+                    <tr key={s.id}><td className="td-name">{s.name}</td><td className="td-muted">{s.email}</td></tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </>
         ) : (
           <>
             <header className="header">
-               <div>
-                <h1>Gestão de Atividades</h1>
-                <p className="subtitle">{dbData.activities.length} atividades cadastradas</p>
-               </div>
-               <button className="btn-primary" onClick={() => {
-                 const subjectId = prompt("ID da Matéria para esta atividade:");
-                 const title = prompt("Título da Atividade:");
-                 const weight = prompt("Peso (ex: 1.0 ou 0.5):");
-                 if (subjectId && title && weight) {
-                    fetch('/api/db', { method: 'POST', body: JSON.stringify({ entity: 'activity', data: { subjectId, title, weight: parseFloat(weight) }}) })
-                    .then(r => r.json()).then(res => setDbData({ ...dbData, activities: [...dbData.activities, res] }));
-                 }
-               }}>
-                 <Sparkles size={16} /> Nova Atividade
-               </button>
+              <div><h1>Atividades</h1><p className="subtitle">{dbData.activities.length} avaliações planejadas</p></div>
+              <button className="btn-primary" onClick={() => setShowActivityModal(true)}><Plus size={18} /> Nova Atividade</button>
             </header>
             <div className="table-wrap">
-               <table className="table">
-                  <thead><tr><th>Matéria ID</th><th>Título</th><th>Peso</th></tr></thead>
-                  <tbody>{dbData.activities.map((act: any) => (<tr key={act.id}><td>{act.subjectId}</td><td>{act.title}</td><td>{act.weight}</td></tr>))}</tbody>
-               </table>
+              <table className="table">
+                <thead><tr><th>Atividade</th><th>Matéria</th><th>Peso</th></tr></thead>
+                <tbody>
+                  {dbData.activities.map((a: any) => (
+                    <tr key={a.id}>
+                      <td className="td-name">{a.title}</td>
+                      <td><span className="badge-subject">{dbData.subjects.find((s: any) => s.id === a.subjectId)?.name || 'Matéria '+a.subjectId}</span></td>
+                      <td className="td-muted">{a.weight}x</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </>
         )}
       </main>
 
+      {/* DETALHES LATERAL */}
       {selected && (
         <aside className="detail-panel">
           <div className="detail-header">
-            <div>
-              <h2>{selected.studentName}</h2>
-              <p className="subtitle">{selected.subject}</p>
-            </div>
+            <div><h2>{selected.studentName}</h2><p className="subtitle">{selected.subject}</p></div>
             <button className="btn-close" onClick={() => setSelected(null)}>✕</button>
           </div>
-
           {selected.grade != null && (
-            <div className="grade-circle">
-              <span className="grade-big">{selected.grade.toFixed(1)}</span>
-              <span className="grade-label">/ 10</span>
-            </div>
+            <div className="grade-circle"><span className="grade-big">{selected.grade.toFixed(1)}</span><span className="grade-label">/ 10</span></div>
           )}
-
           {selected.feedback && (
             <div className="feedback-box">
               <p className="feedback-title"><Sparkles size={14} /> Análise AvalIA</p>
               <p className="feedback-text">{selected.feedback}</p>
             </div>
           )}
-
-          <div className="detail-meta">
-            <div className="meta-row"><span>Enviado em</span><span>{selected.submittedAt}</span></div>
-            <div className="meta-row"><span>Fonte</span><span>{selected.source === "pdf" ? "PDF Upload" : "Google Drive"}</span></div>
-            <div className="meta-row"><span>Status</span>
-              <span style={{ color: STATUS_CONFIG[selected.status].color }}>{STATUS_CONFIG[selected.status].label}</span>
-            </div>
-          </div>
-
-          {selected.status === "pending" && (
-            <button className="btn-primary full" onClick={async () => {
-              setSubmissions(prev => prev.map(s => s.id === selected.id ? { ...s, status: "grading" } : s));
-              setSelected(prev => prev ? { ...prev, status: "grading" } : prev);
-              
-              // Em um cenário real com persistência, aqui chamaríamos um re-processamento
-              // Para UX, vamos apenas finalizar o estado
-              setTimeout(() => {
-                setSubmissions(prev => prev.map(s => s.id === selected!.id ? { ...s, status: "graded" } : s));
-                setSelected(prev => prev ? { ...prev, status: "graded" } : prev);
-              }, 1000);
-            }}>
-              <Sparkles size={15} /> Finalizar Avaliação
-            </button>
-          )}
         </aside>
       )}
 
-      {showUpload && (
-        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowUpload(false)}>
+      {/* MODAIS DE CADASTRO */}
+      {showSubjectModal && (
+        <div className="modal-overlay">
           <div className="modal">
-            <h2>Enviar Trabalho</h2>
-
-            <label className="field-label">Nome do Aluno</label>
-            <input className="input" placeholder="Ex: Ana Souza" value={studentName} onChange={e => setStudentName(e.target.value)} />
-
-            <label className="field-label">Matéria</label>
-            <select className="input" value={subject} onChange={e => setSubject(e.target.value)}>
-              {subjectsList.filter(s => s !== "Todos").map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-
-            <div
-              className={`drop-zone ${dragOver ? "drag-over" : ""}`}
-              onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={e => { 
-                e.preventDefault(); 
-                setDragOver(false);
-                const file = e.dataTransfer.files[0];
-                if (file) handleFileUpload(file);
-              }}
-              onClick={() => document.getElementById("file-input")?.click()}
-            >
-              <Upload size={24} />
-              <p>{uploading ? "Processando..." : "Arraste um PDF aqui ou clique para selecionar"}</p>
-              <input 
-                id="file-input"
-                type="file" 
-                accept=".pdf" 
-                style={{ display: "none" }} 
-                onChange={e => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
-              />
-            </div>
-
-            <div className="divider"><span>ou via Google Drive</span></div>
-
-            <label className="field-label">Link do Google Drive</label>
-            <input className="input" placeholder="https://drive.google.com/file/d/..." value={driveUrl} onChange={e => setDriveUrl(e.target.value)} />
-
+            <h2>Cadastrar Matéria</h2>
+            <label className="field-label">Nome</label>
+            <input className="input" placeholder="Ex: Cálculo III" value={newSubData.name} onChange={e => setNewSubData({...newSubData, name: e.target.value})} />
+            <label className="field-label">Código</label>
+            <input className="input" placeholder="Ex: MAT003" value={newSubData.code} onChange={e => setNewSubData({...newSubData, code: e.target.value})} />
             <div className="modal-actions">
-              <button className="btn-ghost" onClick={() => setShowUpload(false)}>Cancelar</button>
-              <button className="btn-primary" onClick={handleDriveSubmit} disabled={uploading || !studentName}>
-                {uploading ? "Enviando..." : "Enviar"}
-              </button>
+              <button className="btn-ghost" onClick={() => setShowSubjectModal(false)}>Cancelar</button>
+              <button className="btn-primary" onClick={() => handleAddEntity('subject', newSubData)}>Salvar</button>
             </div>
           </div>
         </div>
       )}
 
+      {showStudentModal && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h2>Cadastrar Aluno</h2>
+            <label className="field-label">Nome Completo</label>
+            <input className="input" placeholder="Ex: Maria Silva" value={newStuData.name} onChange={e => setNewStuData({...newStuData, name: e.target.value})} />
+            <label className="field-label">Email</label>
+            <input className="input" placeholder="Ex: maria@email.com" value={newStuData.email} onChange={e => setNewStuData({...newStuData, email: e.target.value})} />
+            <div className="modal-actions">
+              <button className="btn-ghost" onClick={() => setShowStudentModal(false)}>Cancelar</button>
+              <button className="btn-primary" onClick={() => handleAddEntity('student', newStuData)}>Salvar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showActivityModal && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h2>Nova Atividade</h2>
+            <label className="field-label">Matéria</label>
+            <select className="input" value={newActData.subjectId} onChange={e => setNewActData({...newActData, subjectId: e.target.value})}>
+              <option value="">Selecione...</option>
+              {dbData.subjects.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            <label className="field-label">Título</label>
+            <input className="input" placeholder="Ex: Prova 1" value={newActData.title} onChange={e => setNewActData({...newActData, title: e.target.value})} />
+            <label className="field-label">Peso</label>
+            <input className="input" type="number" step="0.1" value={newActData.weight} onChange={e => setNewActData({...newActData, weight: parseFloat(e.target.value)})} />
+            <div className="modal-actions">
+              <button className="btn-ghost" onClick={() => setShowActivityModal(false)}>Cancelar</button>
+              <button className="btn-primary" onClick={() => handleAddEntity('activity', newActData)}>Salvar Atividade</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showUpload && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h2>Novo Trabalho</h2>
+            <label className="field-label">Aluno</label>
+            <select className="input" value={studentName} onChange={e => setStudentName(e.target.value)}>
+              <option value="">Selecione...</option>
+              {dbData.students.map((s: any) => <option key={s.id} value={s.name}>{s.name}</option>)}
+            </select>
+            <label className="field-label">Matéria</label>
+            <select className="input" value={subject} onChange={e => setSubject(e.target.value)}>
+              <option value="">Selecione...</option>
+              {dbData.subjects.map((s: any) => <option key={s.id} value={s.name}>{s.name}</option>)}
+            </select>
+            <div className={`drop-zone ${dragOver ? "drag-over" : ""}`} onDragOver={e => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={e => { e.preventDefault(); setDragOver(false); const file = e.dataTransfer.files[0]; if (file) handleFileUpload(file); }} onClick={() => document.getElementById("file-input")?.click()}>
+              <Upload size={24} />
+              <p>{uploading ? "Processando..." : "Clique ou arraste o PDF do trabalho"}</p>
+              <input id="file-input" type="file" accept=".pdf" style={{ display: "none" }} onChange={e => e.target.files?.[0] && handleFileUpload(e.target.files[0])} />
+            </div>
+            <div className="modal-actions">
+              <button className="btn-ghost" onClick={() => setShowUpload(false)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
