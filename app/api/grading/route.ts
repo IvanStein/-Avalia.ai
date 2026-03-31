@@ -1,21 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { ChromaClient } from "chromadb";
+import { db } from "@/lib/db";
 import { runSkill } from "@/lib/skill-runner";
 import { SKILLS } from "@/lib/skills";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-const chroma = new ChromaClient({ path: process.env.CHROMA_URL || "http://localhost:8000" });
 
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const studentName = formData.get("studentName") as string;
     const subject = formData.get("subject") as string;
+    const activityTitle = formData.get("activity") as string || "";
+    const mode = (req.nextUrl.searchParams.get("mode") as "local" | "remote") || "local";
     const driveUrl = formData.get("driveUrl") as string | null;
     const file = formData.get("file") as File | null;
 
-    // 1. Extrair texto (Poderia usar SKILL.EXTRACT_WORK futuramente para metadados)
+    // 1. Contexto Pedagógico (Pilar 2 e 3)
+    const [subDetails, actDetails] = await Promise.all([
+      db.getSubjectByName(subject, mode),
+      db.getActivityByTitle(activityTitle, mode)
+    ]);
+
+    const pedagogicalContext = `
+      Ementa da Matéria: ${subDetails?.code || "N/A"} - ${subDetails?.name || "N/A"}
+      Objetivos da Atividade: ${actDetails?.title || "Dissertação Geral"} 
+      Critérios: ${actDetails?.description || "Avaliar clareza, coesão e domínio técnico."}
+    `;
+
+    // 2. Extração de Texto (Pilar 1)
     let studentText = "";
     if (file) {
       studentText = await extractTextFromPDF(file);
@@ -25,33 +38,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Nenhum arquivo ou URL do Drive fornecido" }, { status: 400 });
     }
 
-    // 2. RAG: Buscar referências no ChromaDB (Opcional)
-    let referenceContext = "Nenhum material de referência disponível (ChromaDB offline).";
-    try {
-      const collection = await chroma.getOrCreateCollection({ name: `subject_${subject.replace(/\s/g, "_").toLowerCase()}` });
-      const embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
-      
-      const embeddingResult = await embeddingModel.embedContent(studentText.slice(0, 2000));
-      const queryEmbedding = embeddingResult.embedding.values;
-
-      const results = await collection.query({
-        queryEmbeddings: [queryEmbedding],
-        nResults: 5,
-      });
-
-      if (results.documents[0]?.length > 0) {
-        referenceContext = results.documents[0].join("\n\n");
-      }
-    } catch (e) {
-      console.warn("ChromaDB connection failed, proceeding without RAG context.");
-    }
-
-    // 3. Executar Skill de Avaliação Dissertativa
+    // 3. Executar Skill de Avaliação Dissertativa com Triple Context
     const parsed = await runSkill(SKILLS.GRADE_DISSERTATIVE, {
       student_name: studentName,
       subject,
       student_text: studentText,
-      rag_context: referenceContext,
+      rag_context: pedagogicalContext,
     });
 
     return NextResponse.json({
@@ -61,7 +53,6 @@ export async function POST(req: NextRequest) {
       feedback: parsed.feedback,
       strengths: parsed.strengths,
       improvements: parsed.improvements,
-      criteria_scores: parsed.criteria_scores,
       gradedAt: new Date().toISOString(),
     });
 

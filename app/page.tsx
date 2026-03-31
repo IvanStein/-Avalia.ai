@@ -89,9 +89,11 @@ export default function Dashboard() {
       const formData = new FormData();
       formData.append("studentName", studentName);
       formData.append("subject", subject);
+      // Aqui poderíamos escolher a atividade, por enquanto enviamos a primeira ou vazia
+      formData.append("activity", ""); 
       formData.append("file", file);
 
-      const res = await fetch("/api/grading", { method: "POST", body: formData });
+      const res = await fetch(`/api/grading?mode=${dbMode}`, { method: "POST", body: formData });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
 

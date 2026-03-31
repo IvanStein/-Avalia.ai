@@ -92,5 +92,21 @@ export const db = {
     data.activities.push(newAct);
     saveDB(data);
     return newAct;
+  },
+
+  // Context Retrieval for Grading
+  getSubjectByName: async (name: string, mode: "local" | "remote" = "local") => {
+    if (mode === "remote") {
+      const { rows } = await sql`SELECT * FROM subjects WHERE name = ${name} LIMIT 1`;
+      return rows[0];
+    }
+    return readDB().subjects.find((s: any) => s.name === name);
+  },
+  getActivityByTitle: async (title: string, mode: "local" | "remote" = "local") => {
+    if (mode === "remote") {
+      const { rows } = await sql`SELECT * FROM activities WHERE title = ${title} LIMIT 1`;
+      return rows[0];
+    }
+    return readDB().activities.find((a: any) => a.title === title);
   }
 };
