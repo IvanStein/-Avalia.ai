@@ -2,29 +2,31 @@ import fs from 'fs';
 import path from 'path';
 import { Pool } from 'pg';
 
-let connectionString = process.env.POSTGRES_URL;
-if (connectionString) {
-  try {
-    const url = new URL(connectionString);
-    url.searchParams.delete('sslmode');
-    connectionString = url.toString();
-  } catch (e) {}
-}
+let _pool: Pool | null = null;
 
-const pool = new Pool({ 
-  connectionString,
-  ssl: { rejectUnauthorized: false }
-});
+function getPool() {
+  if (_pool) return _pool;
+  let connectionString = process.env.POSTGRES_URL;
+  if (connectionString) {
+    try {
+      const url = new URL(connectionString);
+      url.searchParams.delete('sslmode');
+      connectionString = url.toString();
+    } catch (e) {}
+  }
+  _pool = new Pool({ 
+    connectionString,
+    ssl: { rejectUnauthorized: false }
+  });
+  return _pool;
+}
 
 async function sql(strings: TemplateStringsArray, ...values: any[]) {
   const query = strings.reduce((acc, str, i) => acc + str + (i < values.length ? `$${i + 1}` : ''), '');
-  return await pool.query(query, values);
+  return await getPool().query(query, values);
 }
 
 const DB_FILE = path.join(process.cwd(), 'mnt/user-data/db.json');
-
-const dir = path.dirname(DB_FILE);
-if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
 const INITIAL_DB: any = {
   subjects:        [{ id: '1', name: 'Cálculo I', code: 'MAT101', syllabus: '' }],
@@ -76,7 +78,15 @@ function readDB(): any {
     error_logs:     logs,
   };
 }
-function saveDB(data: any) { fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2)); }
+function saveDB(data: any) { 
+  try {
+    const dir = path.dirname(DB_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2)); 
+  } catch (e) {
+    console.log('Skipping local file save (Vercel Read-Only env)');
+  }
+}
 
 export const db = {
   // ── SUBJECTS ────────────────────────────────────────────────────────────
