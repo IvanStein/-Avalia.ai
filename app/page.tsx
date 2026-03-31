@@ -37,10 +37,12 @@ export default function Dashboard() {
   const [selected, setSelected] = useState<Submission | null>(null);
   const [activeSubject, setActiveSubject] = useState<string>("Todos");
   const [view, setView] = useState<"dashboard" | "subjects" | "students" | "activities">("dashboard");
+  const [hasMounted, setHasMounted] = useState(false);
   const [dbData, setDbData] = useState<any>({ subjects: [], students: [], activities: [] });
   const [showUpload, setShowUpload] = useState(false);
   
   useEffect(() => {
+    setHasMounted(true);
     fetch('/api/db').then(r => r.json()).then(setDbData);
   }, []);
   const [driveUrl, setDriveUrl] = useState("");
