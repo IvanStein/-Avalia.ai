@@ -18,28 +18,27 @@ const PROMPTS: SkillPrompts = {
     prompt: (p) => `
 Você é um professor universitário experiente corrigindo um trabalho acadêmico.
 
-## Critérios de Avaliação (recuperados via RAG):
+## 1. Contexto Pedagógico
+- Matéria: ${p.subject}
+- Ementa da Matéria: ${p.syllabus || "Não fornecida"}
+- Descritivo da Atividade: ${p.activity_description || "Não fornecido"}
+- Critérios de Avaliação (Padrões definidos):
 ${p.rag_context}
 
-## Trabalho do Aluno:
-Nome: ${p.student_name}
-Matéria: ${p.subject}
-Conteúdo:
+## 2. Trabalho do Aluno
+- Nome: ${p.student_name}
+- Conteúdo:
 ${p.student_text}
 
-## Instruções de Correção:
-- Avalie de 0 a 10 com uma casa decimal
-- Seja justo, construtivo e específico
-- Identifique pontos fortes e áreas de melhoria
-- Use linguagem acessível ao aluno
-- Considere: clareza, profundidade, coerência, uso correto dos conceitos
+## 3. Instruções de Correção:
+- Avalie de 0 a 10 com uma casa decimal baseando-se rigorosamente no Contexto Pedagógico.
+- Escreva EXATAMENTE 1 parágrafo denso e bem estruturado contendo: Um resumo do entregável, os pontos fortes e os pontos de melhoria. Seja objetivo, encorajador e específico.
+- Avalie as métricas base.
 
 Responda SOMENTE em JSON:
 {
   "grade": <0.0 a 10.0>,
-  "feedback": "<feedback geral, máx 300 chars>",
-  "strengths": ["<ponto forte 1>", "<ponto forte 2>"],
-  "improvements": ["<melhoria 1>", "<melhoria 2>"],
+  "feedback": "<1 parágrafo unificado com resumo + pontos fortes + melhorias>",
   "criteria_scores": {
     "clareza": <0-10>,
     "profundidade": <0-10>,
@@ -181,6 +180,40 @@ Responda SOMENTE em JSON:
   "entity": "student" | "subject" | "activity",
   "data": { ... },
   "error": null | "mensagem explicativa"
+}
+    `.trim()
+  },
+  [SKILLS.GRADE_BATCH]: {
+    model: "gemini-1.5-pro",
+    responseType: "json",
+    prompt: (p) => `
+Você é um professor universitário sênior responsável por corrigir um lote de trabalhos acadêmicos simultaneamente.
+
+## 1. Contexto Pedagógico (Aplicável a todos os trabalhos)
+- Matéria: ${p.subject}
+- Ementa da Matéria: ${p.syllabus || "Não fornecida"}
+- Descritivo da Atividade: ${p.activity_description || "Não fornecido"}
+- Critérios de Avaliação (Padrões definidos):
+${p.rag_context}
+
+## 2. Trabalhos dos Alunos
+Abaixo está uma lista (JSON) contendo o nome do aluno e seu respectivo trabalho:
+${JSON.stringify(p.students_works)}
+
+## 3. Instruções de Correção
+Para CADA aluno, analise o trabalho com base no Contexto Pedagógico e retorne a correção.
+- Dê uma nota final (0.0 a 10.0).
+- Escreva EXATAMENTE 1 parágrafo denso contendo: Um breve resumo do que o aluno entregou, os pontos fortes do trabalho e onde ele precisa melhorar. Seja objetivo mas encorajador.
+
+Retorne SOMENTE um JSON válido com a seguinte estrutura:
+{
+  "corrections": [
+    {
+      "student_name": "Nome do Aluno",
+      "grade": <Nota de 0.0 a 10.0>,
+      "feedback": "<1 parágrafo unificado contendo o resumo + pontos fortes + melhorias>"
+    }
+  ]
 }
     `.trim()
   }

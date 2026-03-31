@@ -34,6 +34,7 @@ const INITIAL_DB: any = {
   activities:      [{ id: 'a1', subjectId: '1', title: 'P1 - Derivadas', weight: 1, description: '' }],
   implementacoes:  [],
   submissions:     [],
+  configs:         { system_name: 'Avalia.ai', primary_color: '#6366f1' },
 };
 
 let initPromise: Promise<void> | null = null;
@@ -41,12 +42,16 @@ async function initPostgres() {
   if (initPromise) return initPromise;
   initPromise = (async () => {
     try {
-      await sql`CREATE TABLE IF NOT EXISTS subjects (id TEXT PRIMARY KEY, name TEXT, code TEXT, syllabus TEXT)`;
-      await sql`CREATE TABLE IF NOT EXISTS students (id TEXT PRIMARY KEY, name TEXT, email TEXT)`;
-      try { await sql`ALTER TABLE students ADD COLUMN turma TEXT`; } catch (e) {}
+      await sql`CREATE TABLE IF NOT EXISTS subjects (id TEXT PRIMARY KEY, name TEXT, code TEXT, syllabus TEXT, closed BOOLEAN DEFAULT FALSE)`;
+      try { await sql`ALTER TABLE subjects ADD COLUMN closed BOOLEAN DEFAULT FALSE`; } catch(e){}
+      await sql`CREATE TABLE IF NOT EXISTS students (id TEXT PRIMARY KEY, name TEXT, email TEXT, turma TEXT, subject_ids TEXT)`;
+      try { await sql`ALTER TABLE students ADD COLUMN subject_ids TEXT`; } catch(e){}
       await sql`CREATE TABLE IF NOT EXISTS activities (id TEXT PRIMARY KEY, subject_id TEXT, title TEXT, weight FLOAT, description TEXT)`;
-      await sql`CREATE TABLE IF NOT EXISTS implementacoes (id TEXT PRIMARY KEY, title TEXT, description TEXT, status TEXT, priority TEXT, created_at TEXT)`;
+      await sql`CREATE TABLE IF NOT EXISTS implementacoes (id TEXT PRIMARY KEY, title TEXT, description TEXT, status TEXT, priority TEXT, created_at TEXT, category TEXT, image_url TEXT)`;
+      try { await sql`ALTER TABLE implementacoes ADD COLUMN category TEXT`; } catch(e){}
+      try { await sql`ALTER TABLE implementacoes ADD COLUMN image_url TEXT`; } catch(e){}
       await sql`CREATE TABLE IF NOT EXISTS submissions (id TEXT PRIMARY KEY, student_name TEXT, subject TEXT, status TEXT, grade FLOAT, feedback TEXT, source TEXT, submitted_at TEXT)`;
+      await sql`CREATE TABLE IF NOT EXISTS configs (id TEXT PRIMARY KEY, data TEXT)`;
       await sql`CREATE TABLE IF NOT EXISTS error_logs (id TEXT PRIMARY KEY, message TEXT, details TEXT, mode TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`;
       
       // Cleanup logs older than 24 hours
@@ -72,8 +77,9 @@ function readDB(): any {
   return {
     ...INITIAL_DB,
     ...stored,
-    turmas:         [], // Ignored but kept to prevent null errors where accessed
+    turmas:         [], 
     implementacoes: stored.implementacoes ?? [],
+    configs:        stored.configs        ?? INITIAL_DB.configs,
     error_logs:     logs,
   };
 }
@@ -110,6 +116,17 @@ export const db = {
     saveDB(data);
     return newSub;
   },
+  updateSubject: async (id: string, name: string, code: string, mode: 'local' | 'remote' = 'local') => {
+    if (mode === 'remote') {
+      await sql`UPDATE subjects SET name = ${name}, code = ${code} WHERE id = ${id}`;
+      return { id, name, code };
+    }
+    const data = readDB();
+    const sub = data.subjects.find((s: any) => s.id === id);
+    if (sub) { sub.name = name; sub.code = code; }
+    saveDB(data);
+    return { id, name, code };
+  },
   updateSubjectSyllabus: async (id: string, syllabus: string, mode: 'local' | 'remote' = 'local') => {
     if (mode === 'remote') {
       await sql`UPDATE subjects SET syllabus = ${syllabus} WHERE id = ${id}`;
@@ -120,6 +137,17 @@ export const db = {
     if (sub) sub.syllabus = syllabus;
     saveDB(data);
     return { id, syllabus };
+  },
+  updateSubjectClosed: async (id: string, closed: boolean, mode: 'local' | 'remote' = 'local') => {
+    if (mode === 'remote') {
+      await sql`UPDATE subjects SET closed = ${closed} WHERE id = ${id}`;
+      return { id, closed };
+    }
+    const data = readDB();
+    const sub = data.subjects.find((s: any) => s.id === id);
+    if (sub) sub.closed = closed;
+    saveDB(data);
+    return { id, closed };
   },
   deleteSubject: async (id: string, mode: 'local' | 'remote' = 'local') => {
     if (mode === 'remote') { await sql`DELETE FROM subjects WHERE id = ${id}`; return { id }; }
@@ -139,21 +167,46 @@ export const db = {
   getStudents: async (mode: 'local' | 'remote' = 'local') => {
     if (mode === 'remote') {
       const { rows } = await sql`SELECT * FROM students`;
-      return rows;
+      return rows.map(r => ({ ...r, subjectIds: r.subject_ids ? JSON.parse(r.subject_ids) : [] }));
     }
-    return readDB().students;
+    const data = readDB().students || [];
+    return data.map((s: any) => ({ ...s, subjectIds: s.subjectIds || [] }));
   },
   addStudent: async (name: string, email: string, turma: string = '', mode: 'local' | 'remote' = 'local') => {
     const id = 's' + Date.now().toString();
+    const subjectIds: string[] = [];
     if (mode === 'remote') {
-      await sql`INSERT INTO students (id, name, email, turma) VALUES (${id}, ${name}, ${email}, ${turma})`;
-      return { id, name, email, turma };
+      await sql`INSERT INTO students (id, name, email, turma, subject_ids) VALUES (${id}, ${name}, ${email}, ${turma}, ${JSON.stringify(subjectIds)})`;
+      return { id, name, email, turma, subjectIds };
     }
     const data = readDB();
-    const newStudent = { id, name, email, turma };
+    const newStudent = { id, name, email, turma, subjectIds };
     data.students.push(newStudent);
     saveDB(data);
     return newStudent;
+  },
+  updateStudent: async (id: string, name: string, email: string, turma: string, mode: 'local' | 'remote' = 'local') => {
+    if (mode === 'remote') {
+      await sql`UPDATE students SET name = ${name}, email = ${email}, turma = ${turma} WHERE id = ${id}`;
+      return { id, name, email, turma };
+    }
+    const data = readDB();
+    const stu = data.students.find((s: any) => s.id === id);
+    if (stu) { stu.name = name; stu.email = email; stu.turma = turma; }
+    saveDB(data);
+    return stu || { id, name, email, turma };
+  },
+  updateStudentSubjects: async (id: string, subjectIds: string[], mode: 'local' | 'remote' = 'local') => {
+    if (mode === 'remote') {
+      const jsonStr = JSON.stringify(subjectIds);
+      await sql`UPDATE students SET subject_ids = ${jsonStr} WHERE id = ${id}`;
+      return { id, subjectIds };
+    }
+    const data = readDB();
+    const stu = data.students.find((s: any) => s.id === id);
+    if (stu) { stu.subjectIds = subjectIds; }
+    saveDB(data);
+    return stu;
   },
   deleteStudent: async (id: string, mode: 'local' | 'remote' = 'local') => {
     if (mode === 'remote') { await sql`DELETE FROM students WHERE id = ${id}`; return { id }; }
@@ -182,6 +235,17 @@ export const db = {
     saveDB(data);
     return newAct;
   },
+  updateActivity: async (id: string, subjectId: string, title: string, weight: number, description: string, mode: 'local' | 'remote' = 'local') => {
+    if (mode === 'remote') {
+      await sql`UPDATE activities SET subject_id = ${subjectId}, title = ${title}, weight = ${weight}, description = ${description} WHERE id = ${id}`;
+      return { id, subjectId, title, weight, description };
+    }
+    const data = readDB();
+    const act = data.activities.find((a: any) => a.id === id);
+    if (act) { act.subjectId = subjectId; act.title = title; act.weight = weight; act.description = description; }
+    saveDB(data);
+    return { id, subjectId, title, weight, description };
+  },
   deleteActivity: async (id: string, mode: 'local' | 'remote' = 'local') => {
     if (mode === 'remote') { await sql`DELETE FROM activities WHERE id = ${id}`; return { id }; }
     const data = readDB();
@@ -208,19 +272,30 @@ export const db = {
     }
     return readDB().implementacoes;
   },
-  addImplementacao: async (title: string, description: string, priority: string, mode: 'local' | 'remote' = 'local') => {
+  addImplementacao: async (title: string, description: string, priority: string, category: string = '', imageUrl: string = '', mode: 'local' | 'remote' = 'local') => {
     const id = 'imp' + Date.now().toString();
     const createdAt = new Date().toISOString().split('T')[0];
     const status = 'backlog';
     if (mode === 'remote') {
-      await sql`INSERT INTO implementacoes (id, title, description, status, priority, created_at) VALUES (${id}, ${title}, ${description}, ${status}, ${priority}, ${createdAt})`;
-      return { id, title, description, status, priority, createdAt };
+      await sql`INSERT INTO implementacoes (id, title, description, status, priority, created_at, category, image_url) VALUES (${id}, ${title}, ${description}, ${status}, ${priority}, ${createdAt}, ${category}, ${imageUrl})`;
+      return { id, title, description, status, priority, createdAt, category, imageUrl };
     }
     const data = readDB();
-    const newImp = { id, title, description, status, priority, createdAt };
+    const newImp = { id, title, description, status, priority, createdAt, category, imageUrl };
     data.implementacoes.push(newImp);
     saveDB(data);
     return newImp;
+  },
+  updateImplementacao: async (id: string, title: string, description: string, priority: string, category: string, imageUrl: string, mode: 'local' | 'remote' = 'local') => {
+    if (mode === 'remote') {
+      await sql`UPDATE implementacoes SET title = ${title}, description = ${description}, priority = ${priority}, category = ${category}, image_url = ${imageUrl} WHERE id = ${id}`;
+      return { id, title, description, priority, category, imageUrl };
+    }
+    const data = readDB();
+    const imp = data.implementacoes.find((i: any) => i.id === id);
+    if (imp) { imp.title = title; imp.description = description; imp.priority = priority; imp.category = category; imp.imageUrl = imageUrl; }
+    saveDB(data);
+    return { id, title, description, priority, category, imageUrl };
   },
   updateImplementacaoStatus: async (id: string, status: string, mode: 'local' | 'remote' = 'local') => {
     if (mode === 'remote') {
@@ -266,6 +341,27 @@ export const db = {
     const data = readDB();
     data.submissions = data.submissions.filter((s: any) => s.id !== id);
     saveDB(data); return { id };
+  },
+
+  // ── CONFIGS ─────────────────────────────────────────────────────────────
+  getConfigs: async (mode: 'local' | 'remote' = 'local') => {
+    if (mode === 'remote') {
+      await initPostgres();
+      const { rows } = await sql`SELECT data FROM configs WHERE id = 'main' LIMIT 1`;
+      return rows[0] ? JSON.parse(rows[0].data) : INITIAL_DB.configs;
+    }
+    return readDB().configs;
+  },
+  saveConfigs: async (configs: any, mode: 'local' | 'remote' = 'local') => {
+    if (mode === 'remote') {
+      const dataStr = JSON.stringify(configs);
+      await sql`INSERT INTO configs (id, data) VALUES ('main', ${dataStr}) ON CONFLICT (id) DO UPDATE SET data = ${dataStr}`;
+      return configs;
+    }
+    const data = readDB();
+    data.configs = configs;
+    saveDB(data);
+    return configs;
   },
 
   // ── ERROR LOGS ──────────────────────────────────────────────────────────

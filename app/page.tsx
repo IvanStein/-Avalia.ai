@@ -9,9 +9,11 @@ import {
 } from "lucide-react";
 
 // ── TYPES ──────────────────────────────────────────────────────────────────
-interface Subject       { id: string; name: string; code: string; syllabus?: string; }
-interface Student       { id: string; name: string; email: string; turma?: string; }
+interface Subject       { id: string; name: string; code: string; syllabus?: string; closed?: boolean; }
+interface Student       { id: string; name: string; email: string; turma?: string; subjectIds?: string[]; }
 interface Activity      { id: string; subjectId: string; title: string; weight: number; description?: string; }
+interface Implementacao { id: string; title: string; description: string; status: string; priority: string; createdAt: string; category?: string; imageUrl?: string; }
+interface AppConfig     { system_name: string; primary_color: string; }
 interface Turma         { id: string; name: string; studentIds: string[]; }
 interface Implementacao { id: string; title: string; description: string; status: string; priority: string; createdAt: string; }
 interface Submission    { id: string; studentName: string; subject: string; submittedAt: string; status: 'pending'|'grading'|'graded'|'error'; grade?: number; feedback?: string; source: 'pdf'|'drive'; }
@@ -33,9 +35,9 @@ interface DBData {
   subjects: Subject[];
   students: Student[];
   activities: Activity[];
-  turmas: Turma[];
   implementacoes: Implementacao[];
   submissions: Submission[];
+  configs: AppConfig;
 }
 
 const STATUS_CONFIG = {
@@ -58,7 +60,10 @@ const PRIORITY_CONFIG: Record<string, { label: string; cls: string }> = {
   baixa: { label: '▼ Baixa', cls: 'priority-baixa' },
 };
 
-const EMPTY_DB: DBData = { subjects: [], students: [], activities: [], turmas: [], implementacoes: [], submissions: [] };
+const EMPTY_DB: DBData = { 
+  subjects: [], students: [], activities: [], implementacoes: [], submissions: [], 
+  configs: { system_name: 'Avalia.ai', primary_color: '#6366f1' } 
+};
 
 // ── HELPERS ────────────────────────────────────────────────────────────────
 function normalize(s: string) {
@@ -82,13 +87,20 @@ function matchStudentByFilename(filename: string, students: Student[]): { studen
   return best;
 }
 
+function cleanFilenameForName(filename: string) {
+  let clean = filename.replace(/\.pdf$/i, '').replace(/[-_]/g, ' ');
+  clean = clean.replace(/\b(atividade|trabalho|avalia[cç][aã]o|tarefa|prova|teste|\d+)\b/gi, '');
+  clean = clean.replace(/\s+/g, ' ').trim();
+  return clean.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+}
+
 function syllabusChunks(raw: string): string[] {
   try { return JSON.parse(raw) as string[]; } catch { return raw ? [raw] : []; }
 }
 
 // ── COMPONENT ─────────────────────────────────────────────────────────────
 export default function Dashboard() {
-  type View = 'dashboard'|'subjects'|'students'|'activities'|'batch'|'implementacoes';
+  type View = 'dashboard'|'subjects'|'students'|'enrollment'|'activities'|'batch'|'implementacoes'|'settings';
   const [view, setView] = useState<View>('dashboard');
   const [hasMounted, setHasMounted] = useState(false);
   const [dbData, setDbData] = useState<DBData>(EMPTY_DB);
@@ -97,31 +109,37 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<Submission | null>(null);
 
-  // Subject modals
+  // Modals visibility
   const [showSubjectModal, setShowSubjectModal] = useState(false);
+  const [showStudentModal, setShowStudentModal] = useState(false);
+  const [showActivityModal, setShowActivityModal] = useState(false);
+  const [showImplModal, setShowImplModal] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
+
+  // Edit states
+  const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
+  const [editingImpl, setEditingImpl] = useState<Implementacao | null>(null);
+
+  // Forms
   const [newSubData, setNewSubData] = useState({ name: '', code: '' });
   const [syllabusFile, setSyllabusFile] = useState<File | null>(null);
   const [syllabusUploading, setSyllabusUploading] = useState(false);
   const [syllabusTarget, setSyllabusTarget] = useState<Subject | null>(null);
 
-  // Student modal
-  const [showStudentModal, setShowStudentModal] = useState(false);
   const [newStuData, setNewStuData] = useState({ name: '', email: '', turma: '' });
-
-  // Activity modal
-  const [showActivityModal, setShowActivityModal] = useState(false);
   const [newActData, setNewActData] = useState({ subjectId: '', title: '', weight: 1, description: '' });
-
-
-  // Implementation modal
-  const [showImplModal, setShowImplModal] = useState(false);
-  const [newImpl, setNewImpl] = useState({ title: '', description: '', priority: 'media' });
+  const [newImpl, setNewImpl] = useState({ title: '', description: '', priority: 'media', category: '', imageUrl: '' });
+  const [tempConfigs, setTempConfigs] = useState<AppConfig>(EMPTY_DB.configs);
 
   // Upload (single)
-  const [showUpload, setShowUpload] = useState(false);
   const [uploadName, setUploadName] = useState('');
   const [uploadSubject, setUploadSubject] = useState('');
   const [uploading, setUploading] = useState(false);
+
+  // Enrollment
+  const [enrollSubjectId, setEnrollSubjectId] = useState('');
 
   // Batch
   const [batchEntries, setBatchEntries] = useState<BatchEntry[]>([]);
@@ -142,10 +160,11 @@ export default function Dashboard() {
         subjects:        data.subjects        ?? [],
         students:        data.students        ?? [],
         activities:      data.activities      ?? [],
-        turmas:          data.turmas          ?? [],
         implementacoes:  data.implementacoes  ?? [],
         submissions:     data.submissions     ?? [],
+        configs:         data.configs         ?? EMPTY_DB.configs,
       });
+      setTempConfigs(data.configs ?? EMPTY_DB.configs);
     } catch (e: any) {
       setLoadError(e.message);
     } finally {
@@ -193,16 +212,21 @@ export default function Dashboard() {
   };
 
   // ── SUBJECT ACTIONS ────────────────────────────────────────────────────
+  const openSubjectModal = (s?: Subject) => {
+    if (s) { setEditingSubject(s); setNewSubData({ name: s.name, code: s.code }); }
+    else { setEditingSubject(null); setNewSubData({ name: '', code: '' }); }
+    setShowSubjectModal(true);
+  };
   const saveSubject = async () => {
     if (!newSubData.name || !newSubData.code) return alert('Preencha nome e código');
     try {
-      const sub = await apiPost('subject', { ...newSubData, syllabus: '' });
-      // if file selected, upload syllabus right after
-      if (syllabusFile) await uploadSyllabus(sub.id, syllabusFile);
-      setShowSubjectModal(false);
-      setNewSubData({ name: '', code: '' });
-      setSyllabusFile(null);
-      await fetchDB();
+      if (editingSubject) {
+        await apiPost('subject-update', { id: editingSubject.id, ...newSubData });
+      } else {
+        const sub = await apiPost('subject', { ...newSubData, syllabus: '' });
+        if (syllabusFile) await uploadSyllabus(sub.id, syllabusFile);
+      }
+      setShowSubjectModal(false); setSyllabusFile(null); await fetchDB();
     } catch (e: any) { alert('Erro: ' + e.message); }
   };
 
@@ -229,32 +253,149 @@ export default function Dashboard() {
     } catch (e: any) { alert('Erro: ' + e.message); }
   };
 
+  // ── STUDENT ACTIONS ────────────────────────────────────────────────────
+  const openStudentModal = (s?: Student) => {
+    if (s) { setEditingStudent(s); setNewStuData({ name: s.name, email: s.email, turma: s.turma || '' }); }
+    else { setEditingStudent(null); setNewStuData({ name: '', email: '', turma: '' }); }
+    setShowStudentModal(true);
+  };
+
+  const handleImplPaste = (e: React.ClipboardEvent) => {
+    const item = e.clipboardData.items[0];
+    if (item?.type.includes('image')) {
+      const file = item.getAsFile();
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          setNewImpl(prev => ({ ...prev, imageUrl: event.target?.result as string }));
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+  };
+
+  const toggleStudentEnrollment = async (student: Student) => {
+    if (!enrollSubjectId) return;
+    const subject = dbData.subjects.find(s => s.id === enrollSubjectId);
+    if (subject?.closed) {
+      alert(`A matéria "${subject.name}" está fechada. Não é possível alterar a enturmação.`);
+      return;
+    }
+
+    const currentSubId = (student.subjectIds || [])[0];
+    if (currentSubId && currentSubId !== enrollSubjectId) {
+       const currentSub = dbData.subjects.find(s => s.id === currentSubId);
+       if (currentSub?.closed) {
+         alert(`O aluno está associado à matéria "${currentSub.name}" que já foi fechada.`);
+         return;
+       }
+    }
+
+    const currentIds = student.subjectIds || [];
+    const hasIt = currentIds.includes(enrollSubjectId);
+    
+    // One student -> One Subject enforcement
+    const newIds = hasIt ? [] : [enrollSubjectId];
+
+    setDbData(prev => ({
+      ...prev,
+      students: prev.students.map(s => s.id === student.id ? { ...s, subjectIds: newIds } : s)
+    }));
+    try {
+      await apiPost('student-subjects', { id: student.id, subjectIds: newIds });
+    } catch (e: any) {
+      alert('Erro: ' + e.message);
+      await fetchDB();
+    }
+  };
+  const handleStudentsImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+      let count = 0;
+      for (const line of lines) {
+        const parts = line.split(/[,;]/).map(s => s.trim());
+        const name = parts[0];
+        const email = parts[1] || '';
+        const turma = parts[2] || '';
+        if (name && name.toLowerCase() !== 'nome' && name.toLowerCase() !== 'name') {
+          await apiPost('student', { name, email, turma });
+          count++;
+        }
+      }
+      alert(`Foram importados ${count} alunos com sucesso!`);
+      await fetchDB();
+    } catch (err: any) {
+      alert('Erro na importação: ' + err.message);
+    }
+    e.target.value = '';
+  };
+
+  const saveStudent = async () => {
+    if (!newStuData.name) return alert('Preencha o nome');
+    try {
+      if (editingStudent) {
+        await apiPost('student-update', { id: editingStudent.id, ...newStuData });
+      } else {
+        await apiPost('student', newStuData);
+      }
+      setShowStudentModal(false); await fetchDB();
+    } catch (e: any) { alert('Erro: ' + e.message); }
+  };
+
   // ── ACTIVITY ACTIONS ───────────────────────────────────────────────────
+  const openActivityModal = (a?: Activity) => {
+    if (a) { setEditingActivity(a); setNewActData({ subjectId: a.subjectId, title: a.title, weight: a.weight, description: a.description || '' }); }
+    else { setEditingActivity(null); setNewActData({ subjectId: '', title: '', weight: 1, description: '' }); }
+    setShowActivityModal(true);
+  };
   const saveActivity = async () => {
     if (!newActData.title || !newActData.subjectId) return alert('Preencha título e matéria');
     try {
-      await apiPost('activity', newActData);
-      setShowActivityModal(false);
-      setNewActData({ subjectId: '', title: '', weight: 1, description: '' });
-      await fetchDB();
+      if (editingActivity) {
+        await apiPost('activity-update', { id: editingActivity.id, ...newActData });
+      } else {
+        await apiPost('activity', newActData);
+      }
+      setShowActivityModal(false); await fetchDB();
     } catch (e: any) { alert('Erro: ' + e.message); }
   };
 
-
   // ── IMPLEMENTATION ACTIONS ─────────────────────────────────────────────
+  const openImplModal = (i?: Implementacao) => {
+    if (i) { setEditingImpl(i); setNewImpl({ title: i.title, description: i.description, priority: i.priority, category: i.category || '', imageUrl: i.imageUrl || '' }); }
+    else { setEditingImpl(null); setNewImpl({ title: '', description: '', priority: 'media', category: '', imageUrl: '' }); }
+    setShowImplModal(true);
+  };
   const saveImpl = async () => {
     if (!newImpl.title) return alert('Informe o título');
     try {
-      await apiPost('implementacao', newImpl);
-      setShowImplModal(false); setNewImpl({ title: '', description: '', priority: 'media' });
-      await fetchDB();
+      if (editingImpl) {
+        await apiPost('implementacao-update', { id: editingImpl.id, ...newImpl });
+      } else {
+        await apiPost('implementacao', newImpl);
+      }
+      setShowImplModal(false); await fetchDB();
     } catch (e: any) { alert('Erro: ' + e.message); }
   };
-  const cycleStatus = async (imp: Implementacao) => {
+  const cycleStatus = async (imp: Implementacao, back: boolean = false) => {
     const order = ['backlog', 'validating', 'approved', 'done'];
-    const next = order[(order.indexOf(imp.status) + 1) % order.length];
+    const idx = order.indexOf(imp.status);
+    const nextIdx = back ? (idx - 1 + order.length) % order.length : (idx + 1) % order.length;
+    const next = order[nextIdx];
     try { await apiPost('implementacao-status', { id: imp.id, status: next }); await fetchDB(); }
     catch (e: any) { alert('Erro: ' + e.message); }
+  };
+
+  // ── SETTINGS ──────────────────────────────────────────────────────────
+  const saveSettings = async () => {
+    try {
+      await apiPost('configs', tempConfigs);
+      alert('Configurações salvas!');
+      await fetchDB();
+    } catch (e: any) { alert('Erro: ' + e.message); }
   };
 
   // ── SINGLE UPLOAD ──────────────────────────────────────────────────────
@@ -278,14 +419,15 @@ export default function Dashboard() {
   const addBatchFiles = (files: FileList) => {
     const entries: BatchEntry[] = Array.from(files).map(file => {
       const match = matchStudentByFilename(file.name, dbData.students);
+      const isGoodMatch = match.score >= 0.3; // Limiar reduzido para melhor matching
       return {
         id: `${Date.now()}-${Math.random()}`,
         filename: file.name,
         file,
-        studentId: match.score >= 0.5 ? match.studentId : '',
+        studentId: isGoodMatch ? match.studentId : '',
         subjectId: batchSubjectId,
         matchScore: match.score,
-        matchName: match.name,
+        matchName: isGoodMatch ? match.name : cleanFilenameForName(file.name),
         status: 'idle',
       };
     });
@@ -361,6 +503,7 @@ export default function Dashboard() {
           <p className="nav-label">Entidades</p>
           <NavItem v="subjects"       icon={FileText}    label="Matérias"/>
           <NavItem v="students"       icon={UserPlus}    label="Alunos"/>
+          <NavItem v="enrollment"     icon={Users}       label="Enturmação"/>
           <NavItem v="activities"     icon={Clock}       label="Atividades"/>
           <p className="nav-label">Trabalho</p>
           <NavItem v="batch"          icon={Layers}      label="Correção em Lote"/>
@@ -474,15 +617,15 @@ export default function Dashboard() {
         {/* ══ MATÉRIAS ═══════════════════════════════════════════════════ */}
         {view === 'subjects' && <>
           <header className="header">
-            <div><h1>Matérias</h1><p className="subtitle">{dbData.subjects.length} disciplinas · {dbMode === 'local' ? 'Local' : 'Nuvem'}</p></div>
-            <button className="btn-primary" onClick={() => setShowSubjectModal(true)}><Plus size={16}/> Nova Matéria</button>
+            <div><h1>Matérias</h1><p className="subtitle">{dbData.subjects.length} disciplinas</p></div>
+            <button className="btn-primary" onClick={() => openSubjectModal()}><Plus size={16}/> Nova Matéria</button>
           </header>
           <div className="table-wrap fade-in">
             <table className="table">
               <thead><tr><th>Nome</th><th>Código</th><th>Ementa</th><th></th></tr></thead>
               <tbody>
                 {dbData.subjects.length === 0
-                  ? <tr><td colSpan={4}><div className="empty-state"><FileText size={40}/><p>Nenhuma matéria nesta base.</p></div></td></tr>
+                  ? <tr><td colSpan={4}><div className="empty-state"><FileText size={40}/><p>Nenhuma matéria.</p></div></td></tr>
                   : dbData.subjects.map(s => {
                     const chunks = syllabusChunks(s.syllabus ?? '');
                     return (
@@ -497,7 +640,8 @@ export default function Dashboard() {
                         </td>
                         <td>
                           <div className="actions">
-                            <button className="btn-icon" title="Importar ementa PDF" onClick={() => setSyllabusTarget(s)}><Upload size={13}/></button>
+                            <button className="btn-icon" onClick={() => openSubjectModal(s)}><Edit2 size={13}/></button>
+                            <button className="btn-icon" title="Importar ementa" onClick={() => setSyllabusTarget(s)}><Upload size={13}/></button>
                             <button className="btn-icon-danger" onClick={() => del('subject', s.id)}><Trash2 size={14}/></button>
                           </div>
                         </td>
@@ -513,27 +657,70 @@ export default function Dashboard() {
         {/* ══ ALUNOS ═════════════════════════════════════════════════════ */}
         {view === 'students' && <>
           <header className="header">
-            <div><h1>Alunos</h1><p className="subtitle">{dbData.students.length} estudantes · {dbMode === 'local' ? 'Local' : 'Nuvem'}</p></div>
-            <button className="btn-primary" onClick={() => setShowStudentModal(true)}><UserPlus size={16}/> Novo Aluno</button>
+            <div><h1>Alunos</h1><p className="subtitle">{dbData.students.length} estudantes</p></div>
+            <div className="header-actions">
+              <label className="btn-ghost" style={{cursor:'pointer', position:'relative', overflow:'hidden'}}>
+                <Upload size={16}/> Importar (TXT/CSV)
+                <input type="file" accept=".txt,.csv" style={{position:'absolute',opacity:0,width:1,height:1,left:0,top:0}} onChange={handleStudentsImport}/>
+              </label>
+              <button className="btn-primary" onClick={() => openStudentModal()}><UserPlus size={16}/> Novo Aluno</button>
+            </div>
           </header>
           <div className="table-wrap fade-in">
             <table className="table">
-              <thead><tr><th>Nome</th><th>Email</th><th>Turma</th><th></th></tr></thead>
+              <thead><tr><th>Nome</th><th>Email</th><th>Turma</th><th>Matéria</th><th></th></tr></thead>
               <tbody>
                 {dbData.students.length === 0
-                  ? <tr><td colSpan={4}><div className="empty-state"><UserPlus size={40}/><p>Nenhum aluno nesta base.</p></div></td></tr>
-                  : dbData.students.map(s => {
+                  ? <tr><td colSpan={5}><div className="empty-state"><UserPlus size={40}/><p>Nenhum aluno.</p></div></td></tr>
+                  : [...dbData.students].sort((a,b) => a.name.localeCompare(b.name)).map(s => {
+                    const subId = (s.subjectIds || [])[0];
+                    const sub = subId ? dbData.subjects.find(x => x.id === subId) : null;
                     return (
                       <tr key={s.id}>
                         <td className="td-name">{s.name}</td>
                         <td className="td-muted">{s.email}</td>
+                        <td>{!s.turma ? <span style={{fontSize:11,color:'var(--text2)'}}>Sem turma</span> : <span className="badge badge-blue">{s.turma}</span>}</td>
+                        <td>{sub ? <span className="badge-subject">{sub.name}</span> : <span style={{fontSize:11,color:'var(--text2)'}}>Livre</span>}</td>
                         <td>
-                          {!s.turma
-                            ? <span style={{fontSize:11,color:'var(--text2)'}}>Sem turma</span>
-                            : <span className="badge badge-blue">{s.turma}</span>
-                          }
+                          <div className="actions">
+                            <button className="btn-icon" onClick={() => openStudentModal(s)}><Edit2 size={13}/></button>
+                            <button className="btn-icon-danger" onClick={() => del('student', s.id)}><Trash2 size={14}/></button>
+                          </div>
                         </td>
-                        <td><div className="actions"><button className="btn-icon-danger" onClick={() => del('student', s.id)}><Trash2 size={14}/></button></div></td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </>}
+
+        {/* ══ ATIVIDADES ════════════════════════════════════════════════= */}
+        {view === 'activities' && <>
+          <header className="header">
+            <div><h1>Atividades</h1><p className="subtitle">{dbData.activities.length} avaliações</p></div>
+            <button className="btn-primary" onClick={() => openActivityModal()}><Plus size={16}/> Nova Atividade</button>
+          </header>
+          <div className="table-wrap fade-in">
+            <table className="table">
+              <thead><tr><th>Título</th><th>Matéria</th><th>Peso</th><th>Critério IA</th><th></th></tr></thead>
+              <tbody>
+                {dbData.activities.length === 0
+                  ? <tr><td colSpan={5}><div className="empty-state"><Clock size={40}/><p>Nenhuma atividade.</p></div></td></tr>
+                  : dbData.activities.map(a => {
+                    const sub = dbData.subjects.find(s => s.id === a.subjectId);
+                    return (
+                      <tr key={a.id}>
+                        <td className="td-name">{a.title}</td>
+                        <td><span className="badge-subject">{sub?.name ?? a.subjectId}</span></td>
+                        <td className="td-muted">{a.weight}×</td>
+                        <td className="td-desc">{a.description || <span style={{opacity:.4}}>—</span>}</td>
+                        <td>
+                          <div className="actions">
+                            <button className="btn-icon" onClick={() => openActivityModal(a)}><Edit2 size={13}/></button>
+                            <button className="btn-icon-danger" onClick={() => del('activity', a.id)}><Trash2 size={14}/></button>
+                          </div>
+                        </td>
                       </tr>
                     );
                   })
@@ -543,34 +730,81 @@ export default function Dashboard() {
           </div>
         </>}
 
-        {/* ══ ATIVIDADES ════════════════════════════════════════════════= */}
-        {view === 'activities' && <>
-          <header className="header">
-            <div><h1>Atividades</h1><p className="subtitle">{dbData.activities.length} avaliações · {dbMode === 'local' ? 'Local' : 'Nuvem'}</p></div>
-            <button className="btn-primary" onClick={() => setShowActivityModal(true)}><Plus size={16}/> Nova Atividade</button>
+        {/* ══ ENTURMAÇÃO ════════════════════════════════════════════════= */}
+        {view === 'enrollment' && <>
+          <header className="header" style={{flexDirection:'column', alignItems:'flex-start', gap:16}}>
+            <div><h1>Enturmação</h1><p className="subtitle">Associe alunos a matérias clicando duas vezes sobre o card.</p></div>
+            <div style={{display:'flex', gap:16, alignItems:'center', flexWrap:'wrap'}}>
+              <select className="input" style={{maxWidth:300, background:'var(--surface)'}} value={enrollSubjectId} onChange={e => setEnrollSubjectId(e.target.value)}>
+                <option value="">-- Selecione uma matéria --</option>
+                {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code}) {s.closed ? '🔒' : ''}</option>)}
+              </select>
+
+              {enrollSubjectId && (() => {
+                const sub = dbData.subjects.find(s => s.id === enrollSubjectId);
+                return (
+                  <label style={{display:'flex', alignItems:'center', gap:8, cursor:'pointer', padding:'8px 12px', background:'var(--surface)', borderRadius:8, border:'1px solid var(--border)'}}>
+                    <input type="checkbox" checked={!!sub?.closed} onChange={async () => {
+                      if (!sub) return;
+                      const newClosed = !sub.closed;
+                      setDbData(prev => ({ ...prev, subjects: prev.subjects.map(s => s.id === sub.id ? { ...s, closed: newClosed } : s) }));
+                      try { await apiPost('subject-closed', { id: sub.id, closed: newClosed }); } 
+                      catch(e:any) { alert(e.message); await fetchDB(); }
+                    }} />
+                    <span>Bloquear Enturmação (Matéria Fechada)</span>
+                  </label>
+                );
+              })()}
+            </div>
           </header>
-          <div className="table-wrap fade-in">
-            <table className="table">
-              <thead><tr><th>Título</th><th>Matéria</th><th>Peso</th><th>Critério IA</th><th></th></tr></thead>
-              <tbody>
-                {dbData.activities.length === 0
-                  ? <tr><td colSpan={5}><div className="empty-state"><Clock size={40}/><p>Nenhuma atividade nesta base.</p></div></td></tr>
-                  : dbData.activities.map(a => {
-                    const sub = dbData.subjects.find(s => s.id === a.subjectId);
-                    return (
-                      <tr key={a.id}>
-                        <td className="td-name">{a.title}</td>
-                        <td><span className="badge-subject">{sub?.name ?? a.subjectId}</span></td>
-                        <td className="td-muted">{a.weight}×</td>
-                        <td className="td-desc">{a.description || <span style={{opacity:.4}}>—</span>}</td>
-                        <td><div className="actions"><button className="btn-icon-danger" onClick={() => del('activity', a.id)}><Trash2 size={14}/></button></div></td>
-                      </tr>
-                    );
-                  })
-                }
-              </tbody>
-            </table>
-          </div>
+
+          {!enrollSubjectId ? (
+            <div className="empty-state"><Users size={40}/><p>Selecione uma matéria acima para começar a enturmar.</p></div>
+          ) : (() => {
+            const subject = dbData.subjects.find(s => s.id === enrollSubjectId);
+            const isClosed = !!subject?.closed;
+            const inSubject = dbData.students.filter(s => (s.subjectIds||[]).includes(enrollSubjectId)).sort((a,b) => a.name.localeCompare(b.name));
+            const notInSubject = dbData.students.filter(s => !(s.subjectIds||[]).length).sort((a,b) => a.name.localeCompare(b.name)); // ONLY those with NO subject
+
+            const StudentCard = ({ s, onDoubleClick }: { s: Student; onDoubleClick: () => void }) => {
+              return (
+                <div 
+                  className="kanban-card" 
+                  style={{cursor: isClosed ? 'not-allowed' : 'pointer', userSelect:'none', display:'flex', justifyContent:'space-between', alignItems:'center', opacity: isClosed ? 0.6 : 1}}
+                  onDoubleClick={isClosed ? undefined : onDoubleClick}
+                  title={isClosed ? 'Matéria fechada para edição' : 'Dê um duplo-clique para mover'}
+                >
+                  <div>
+                    <p className="kanban-card-title">{s.name}</p>
+                    <p style={{fontSize:10, color:'var(--text2)'}}>
+                      {s.turma || 'Livre'}
+                    </p>
+                  </div>
+                  <Users size={14} style={{opacity:0.3}}/>
+                </div>
+              );
+            };
+
+            return (
+              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:24}} className="fade-in">
+                <div style={{background:'var(--surface)', padding:16, borderRadius:12, border:'1px solid var(--border)', display:'flex', flexDirection:'column'}}>
+                  <h3 style={{marginBottom:16, display:'flex', alignItems:'center', gap:8}}><UserPlus size={16}/> Não Enturmados <span className="badge">{notInSubject.length}</span></h3>
+                  <div style={{display:'flex', flexDirection:'column', gap:8, flex:1, overflowY:'auto'}}>
+                    {notInSubject.map(s => <StudentCard key={s.id} s={s} onDoubleClick={() => toggleStudentEnrollment(s)}/>)}
+                    {notInSubject.length === 0 && <p style={{fontSize:12, color:'var(--text2)', textAlign:'center', marginTop:20}}>Todos os alunos cadastrados já estão nesta matéria.</p>}
+                  </div>
+                </div>
+
+                <div style={{background:'var(--surface)', padding:16, borderRadius:12, border:'1px dashed var(--accent)', display:'flex', flexDirection:'column'}}>
+                  <h3 style={{marginBottom:16, display:'flex', alignItems:'center', gap:8}}><CheckCircle size={16} color="var(--accent)"/> Em {subject?.name} <span className="badge badge-blue">{inSubject.length}</span></h3>
+                  <div style={{display:'flex', flexDirection:'column', gap:8, flex:1, overflowY:'auto'}}>
+                    {inSubject.map(s => <StudentCard key={s.id} s={s} onDoubleClick={() => toggleStudentEnrollment(s)}/>)}
+                    {inSubject.length === 0 && <p style={{fontSize:12, color:'var(--text2)', textAlign:'center', marginTop:20}}>Nenhum aluno associado. Dê 2 cliques num card ao lado.</p>}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </>}
 
 
@@ -642,12 +876,23 @@ export default function Dashboard() {
                       </div>
 
                       {/* Aluno selector */}
-                      <select className="input" style={{fontSize:12,padding:'6px 10px'}}
-                        value={entry.studentId} disabled={entry.status !== 'idle'}
-                        onChange={e => updateBatch(entry.id, { studentId: e.target.value })}>
-                        <option value="">Selecionar aluno…</option>
-                        {dbData.students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                      </select>
+                      <div style={{display:'flex', gap: 4, alignItems: 'center'}}>
+                        <select className="input" style={{fontSize:12,padding:'6px 10px',flex:1}}
+                          value={entry.studentId} disabled={entry.status !== 'idle'}
+                          onChange={e => updateBatch(entry.id, { studentId: e.target.value })}>
+                          <option value="">Selecionar aluno…</option>
+                          {dbData.students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                        {!entry.studentId && entry.matchName && entry.status === 'idle' && (
+                          <button className="btn-ghost" style={{padding:'4px'}} title={`Cadastrar "${entry.matchName}"`} onClick={async () => {
+                            try {
+                              const s = await apiPost('student', { name: entry.matchName, email: '', turma: '' });
+                              await fetchDB();
+                              updateBatch(entry.id, { studentId: s.id });
+                            } catch (e:any) { alert(e.message); }
+                          }}><Plus size={14} style={{color:'var(--accent)'}}/></button>
+                        )}
+                      </div>
 
                       {/* Matéria selector */}
                       <select className="input" style={{fontSize:12,padding:'6px 10px'}}
@@ -701,11 +946,10 @@ export default function Dashboard() {
         {/* ══ IMPLEMENTAÇÕES ════════════════════════════════════════════= */}
         {view === 'implementacoes' && <>
           <header className="header">
-            <div><h1>Implementações</h1><p className="subtitle">Gestão de ideias, validações e melhorias do sistema</p></div>
-            <button className="btn-primary" onClick={() => setShowImplModal(true)}><Plus size={16}/> Nova Ideia</button>
+            <div><h1>Implementações</h1><p className="subtitle">Gestão de ideias e categorias</p></div>
+            <button className="btn-primary" onClick={() => openImplModal()}><Plus size={16}/> Nova Ideia</button>
           </header>
 
-          {/* Kanban columns */}
           <div className="kanban fade-in">
             {(['backlog','validating','approved','done'] as const).map(status => {
               const cfg = IMPL_STATUS[status];
@@ -718,36 +962,48 @@ export default function Dashboard() {
                     <span style={{marginLeft:'auto',background:'var(--surface2)',borderRadius:20,padding:'1px 7px',fontSize:10}}>{cards.length}</span>
                   </div>
                   <div className="kanban-col-body">
-                    {cards.length === 0 && <p style={{fontSize:11.5,color:'var(--text2)',textAlign:'center',padding:'12px 0'}}>Vazio</p>}
                     {cards.map(imp => (
-                      <div key={imp.id} className="kanban-card" onClick={() => cycleStatus(imp)}>
+                      <div key={imp.id} className="kanban-card">
+                        {imp.imageUrl && <img src={imp.imageUrl} style={{width:'100%',borderRadius:6,marginBottom:8,height:80,objectFit:'cover'}} alt=""/>}
                         <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:4}}>
-                          <p className="kanban-card-title">{imp.title}</p>
+                          <div>
+                            {imp.category && <span style={{fontSize:9,textTransform:'uppercase',letterSpacing:'.05em',color:'var(--text2)',display:'block',marginBottom:2}}>{imp.category}</span>}
+                            <p className="kanban-card-title">{imp.title}</p>
+                          </div>
                           <div style={{display:'flex',gap:4}}>
-                            <button className="btn-icon" style={{flexShrink:0}} onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(`${imp.title}\n${imp.description||''}`); alert('Ideia Copiada!'); }}>
-                              <Copy size={12}/>
-                            </button>
-                            <button className="btn-icon-danger" style={{flexShrink:0}} onClick={e => { e.stopPropagation(); del('implementacao', imp.id); }}>
-                              <Trash2 size={12}/>
-                            </button>
+                            <button className="btn-icon" onClick={() => openImplModal(imp)}><Edit2 size={12}/></button>
+                            <button className="btn-icon-danger" onClick={e => del('implementacao', imp.id)}><Trash2 size={12}/></button>
                           </div>
                         </div>
                         {imp.description && <p className="kanban-card-desc">{imp.description}</p>}
                         <div className="kanban-card-footer">
-                          <span className={`badge ${PRIORITY_CONFIG[imp.priority]?.cls}`}>
-                            {PRIORITY_CONFIG[imp.priority]?.label}
-                          </span>
-                          <span style={{fontSize:10,color:'var(--text2)'}}>{imp.createdAt}</span>
+                          <span className={`badge ${PRIORITY_CONFIG[imp.priority]?.cls}`}>{PRIORITY_CONFIG[imp.priority]?.label}</span>
                         </div>
-                        <p style={{fontSize:9.5,color:'var(--text2)',marginTop:6,display:'flex',alignItems:'center',gap:4}}>
-                          Clique para avançar <ArrowRight size={10}/>
-                        </p>
+                        <div style={{display:'flex',gap:8,marginTop:10}}>
+                          <button style={{flex:1,fontSize:9}} className="btn-ghost" onClick={() => cycleStatus(imp, true)}>Voltar</button>
+                          <button style={{flex:1,fontSize:9}} className="btn-primary" onClick={() => cycleStatus(imp)}>Próximo</button>
+                        </div>
                       </div>
                     ))}
                   </div>
                 </div>
               );
             })}
+          </div>
+        </>}
+
+        {/* ══ SETTINGS ═══════════════════════════════════════════════════ */}
+        {view === 'settings' && <>
+          <header className="header"><div><h1>Configurações do Sistema</h1><p className="subtitle">Personalize a identidade da sua plataforma</p></div></header>
+          <div className="table-wrap fade-in" style={{padding:24,maxWidth:600}}>
+            <label className="field-label">Nome do Sistema</label>
+            <input className="input" value={tempConfigs.system_name} onChange={e => setTempConfigs({...tempConfigs, system_name: e.target.value})}/>
+            <label className="field-label" style={{marginTop:16}}>Cor Primária (HEX)</label>
+            <div style={{display:'flex',gap:12}}>
+              <input className="input" type="color" style={{width:50,height:40,padding:2}} value={tempConfigs.primary_color} onChange={e => setTempConfigs({...tempConfigs, primary_color: e.target.value})}/>
+              <input className="input" placeholder="#6366f1" value={tempConfigs.primary_color} onChange={e => setTempConfigs({...tempConfigs, primary_color: e.target.value})}/>
+            </div>
+            <button className="btn-primary" style={{marginTop:32,width:'100%'}} onClick={saveSettings}>Salvar Configurações</button>
           </div>
         </>}
       </main>
@@ -779,22 +1035,18 @@ export default function Dashboard() {
       {showSubjectModal && (
         <div className="modal-overlay">
           <div className="modal">
-            <div className="modal-header"><h2>Nova Matéria</h2><button className="btn-close" onClick={() => setShowSubjectModal(false)}>✕</button></div>
+            <div className="modal-header"><h2>{editingSubject ? 'Editar Matéria' : 'Nova Matéria'}</h2><button className="btn-close" onClick={() => setShowSubjectModal(false)}>✕</button></div>
             <label className="field-label">Nome da disciplina</label>
             <input className="input" placeholder="Ex: Cálculo III" value={newSubData.name} onChange={e => setNewSubData({...newSubData, name: e.target.value})}/>
             <label className="field-label">Código</label>
             <input className="input" placeholder="Ex: MAT303" value={newSubData.code} onChange={e => setNewSubData({...newSubData, code: e.target.value})}/>
-            <label className="field-label">Ementa (PDF — opcional, pode importar depois)</label>
-            <div className="drop-zone drop-zone-sm" onClick={() => document.getElementById('syllabus-new')?.click()} style={{cursor:'pointer'}}>
-              <Upload size={18}/><span>{syllabusFile ? syllabusFile.name : 'Arraste o PDF da ementa ou clique'}</span>
-              <input id="syllabus-new" type="file" accept=".pdf" style={{display:'none'}} onChange={e => e.target.files?.[0] && setSyllabusFile(e.target.files[0])}/>
-            </div>
-            {syllabusFile && <span className="syllabus-chip"><CheckCircle size={11}/> {syllabusFile.name}</span>}
+            {!editingSubject && <>
+              <label className="field-label">Ementa (PDF)</label>
+              <input type="file" accept=".pdf" className="input" onChange={e => e.target.files?.[0] && setSyllabusFile(e.target.files[0])}/>
+            </>}
             <div className="modal-actions">
               <button className="btn-ghost" onClick={() => setShowSubjectModal(false)}>Cancelar</button>
-              <button className="btn-primary" onClick={saveSubject} disabled={syllabusUploading}>
-                {syllabusUploading ? <><Sparkles size={14} className="spin"/> Importando…</> : 'Salvar'}
-              </button>
+              <button className="btn-primary" onClick={saveSubject}>Salvar</button>
             </div>
           </div>
         </div>
@@ -826,66 +1078,72 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ══ MODAL: NOVO ALUNO ════════════════════════════════════════════ */}
       {showStudentModal && (
         <div className="modal-overlay">
           <div className="modal">
-            <div className="modal-header"><h2>Novo Aluno</h2><button className="btn-close" onClick={() => setShowStudentModal(false)}>✕</button></div>
+            <div className="modal-header"><h2>{editingStudent ? 'Editar Aluno' : 'Novo Aluno'}</h2><button className="btn-close" onClick={() => setShowStudentModal(false)}>✕</button></div>
             <label className="field-label">Nome completo</label>
-            <input className="input" placeholder="Ex: Maria Silva" value={newStuData.name} onChange={e => setNewStuData({...newStuData, name: e.target.value})}/>
+            <input className="input" placeholder="Ex: MariaSilva" value={newStuData.name} onChange={e => setNewStuData({...newStuData, name: e.target.value})}/>
             <label className="field-label">Email</label>
             <input className="input" placeholder="Ex: maria@email.com" value={newStuData.email} onChange={e => setNewStuData({...newStuData, email: e.target.value})}/>
-            <label className="field-label">Turma (opcional)</label>
-            <input className="input" placeholder="Ex: Turma A" value={newStuData.turma} onChange={e => setNewStuData({...newStuData, turma: e.target.value})}/>
+            <label className="field-label">Turma</label>
+            <input className="input" placeholder="Turma A" value={newStuData.turma} onChange={e => setNewStuData({...newStuData, turma: e.target.value})}/>
             <div className="modal-actions">
               <button className="btn-ghost" onClick={() => setShowStudentModal(false)}>Cancelar</button>
-              <button className="btn-primary" onClick={async () => {
-                if (!newStuData.name) return;
-                try { await apiPost('student', newStuData); setShowStudentModal(false); setNewStuData({name:'',email:'',turma:''}); await fetchDB(); }
-                catch (e: any) { alert(e.message); }
-              }}>Salvar</button>
+              <button className="btn-primary" onClick={saveStudent}>Salvar</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ══ MODAL: NOVA ATIVIDADE ════════════════════════════════════════ */}
       {showActivityModal && (
         <div className="modal-overlay">
           <div className="modal">
-            <div className="modal-header"><h2>Nova Atividade</h2><button className="btn-close" onClick={() => setShowActivityModal(false)}>✕</button></div>
+            <div className="modal-header"><h2>{editingActivity ? 'Editar Atividade' : 'Nova Atividade'}</h2><button className="btn-close" onClick={() => setShowActivityModal(false)}>✕</button></div>
             <label className="field-label">Matéria</label>
             <select className="input" value={newActData.subjectId} onChange={e => setNewActData({...newActData, subjectId: e.target.value})}>
               <option value="">Selecione…</option>
               {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
-            <label className="field-label">Título da avaliação</label>
-            <input className="input" placeholder="Ex: Prova Bimestral 1" value={newActData.title} onChange={e => setNewActData({...newActData, title: e.target.value})}/>
+            <label className="field-label">Título</label>
+            <input className="input" value={newActData.title} onChange={e => setNewActData({...newActData, title: e.target.value})}/>
             <label className="field-label">Peso</label>
-            <input className="input" type="number" step="0.1" min="0.1" value={newActData.weight} onChange={e => setNewActData({...newActData, weight: parseFloat(e.target.value)})}/>
-            <label className="field-label">Critérios de correção para a IA (descrição completa)</label>
-            <textarea className="textarea" style={{minHeight:120}} placeholder={`Descreva em detalhes o que a IA deve avaliar:\n• Estrutura do texto\n• Domínio dos conceitos\n• Exemplos exigidos\n• Nota máxima por critério…`}
-              value={newActData.description}
-              onChange={e => setNewActData({...newActData, description: e.target.value})}/>
+            <input className="input" type="number" step="0.1" value={newActData.weight} onChange={e => setNewActData({...newActData, weight: parseFloat(e.target.value)})}/>
+            <label className="field-label">Critérios IA</label>
+            <textarea className="textarea" placeholder="Descreva os critérios..." value={newActData.description} onChange={e => setNewActData({...newActData, description: e.target.value})}/>
             <div className="modal-actions">
               <button className="btn-ghost" onClick={() => setShowActivityModal(false)}>Cancelar</button>
-              <button className="btn-primary" onClick={saveActivity}>Salvar Atividade</button>
+              <button className="btn-primary" onClick={saveActivity}>Salvar</button>
             </div>
           </div>
         </div>
       )}
 
-
-      {/* ══ MODAL: NOVA IMPLEMENTAÇÃO ════════════════════════════════════ */}
       {showImplModal && (
         <div className="modal-overlay">
           <div className="modal">
-            <div className="modal-header"><h2>Nova Ideia / Implementação</h2><button className="btn-close" onClick={() => setShowImplModal(false)}>✕</button></div>
+            <div className="modal-header"><h2>{editingImpl ? 'Editar Ideia' : 'Nova Ideia'}</h2><button className="btn-close" onClick={() => setShowImplModal(false)}>✕</button></div>
             <label className="field-label">Título</label>
-            <input className="input" placeholder="Ex: Autenticação SSO via Google" value={newImpl.title} onChange={e => setNewImpl({...newImpl, title: e.target.value})}/>
-            <label className="field-label">Descrição detalhada</label>
-            <textarea className="textarea" style={{minHeight:100}} placeholder="Descreva a ideia, o problema que resolve, e como validar..."
-              value={newImpl.description} onChange={e => setNewImpl({...newImpl, description: e.target.value})}/>
+            <input className="input" value={newImpl.title} onChange={e => setNewImpl({...newImpl, title: e.target.value})}/>
+            <label className="field-label">Categoria</label>
+            <input className="input" placeholder="Ex: UX, Bug, Funcionalidade" value={newImpl.category} onChange={e => setNewImpl({...newImpl, category: e.target.value})}/>
+            <label className="field-label">Descrição</label>
+            <textarea className="textarea" placeholder="Descreva a ideia..." value={newImpl.description} onChange={e => setNewImpl({...newImpl, description: e.target.value})} onPaste={handleImplPaste}/>
+            
+            <label className="field-label">Imagem da Ideia (URL ou cole um print)</label>
+            <div style={{display:'flex',gap:10,alignItems:'center'}}>
+              <input className="input" placeholder="https://... ou cole aqui" value={newImpl.imageUrl.startsWith('data:') ? '[Imagem Colada]' : newImpl.imageUrl} 
+                onChange={e => setNewImpl({...newImpl, imageUrl: e.target.value})}
+                onPaste={handleImplPaste}/>
+              {newImpl.imageUrl && (
+                <div style={{position:'relative',width:50,height:50,borderRadius:4,overflow:'hidden',border:'1px solid var(--surface2)'}}>
+                  <img src={newImpl.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover'}} alt=""/>
+                  <button onClick={() => setNewImpl({...newImpl, imageUrl: ''})} style={{position:'absolute',top:0,right:0,background:'rgba(0,0,0,0.5)',color:'white',border:'none',cursor:'pointer',fontSize:10}}>✕</button>
+                </div>
+              )}
+            </div>
+            <p style={{fontSize:10,color:'var(--text2)',marginTop:4}}>Dica: Você pode copiar um print (Ctrl+C) e colar (Ctrl+V) em qualquer campo acima.</p>
+
             <label className="field-label">Prioridade</label>
             <select className="input" value={newImpl.priority} onChange={e => setNewImpl({...newImpl, priority: e.target.value})}>
               <option value="alta">▲ Alta</option>
@@ -894,7 +1152,7 @@ export default function Dashboard() {
             </select>
             <div className="modal-actions">
               <button className="btn-ghost" onClick={() => setShowImplModal(false)}>Cancelar</button>
-              <button className="btn-primary" onClick={saveImpl}>Registrar</button>
+              <button className="btn-primary" onClick={saveImpl}>Salvar</button>
             </div>
           </div>
         </div>

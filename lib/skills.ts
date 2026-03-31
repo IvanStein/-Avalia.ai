@@ -7,6 +7,7 @@ export const SKILLS = {
   CLASS_SUMMARY:      "006",
   EXTRACT_WORK:       "007",
   CRUD_AI:            "008",
+  GRADE_BATCH:        "009",
 } as const;
 
 export type SkillId = typeof SKILLS[keyof typeof SKILLS];
