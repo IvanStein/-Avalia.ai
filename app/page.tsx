@@ -370,8 +370,7 @@ export default function Dashboard() {
 
             <label className="field-label">Matéria</label>
             <select className="input" value={subject} onChange={e => setSubject(e.target.value)}>
-              <option>Cálculo I</option>
-              <option>Física II</option>
+              {subjectsList.filter(s => s !== "Todos").map(s => <option key={s} value={s}>{s}</option>)}
             </select>
 
             <div
