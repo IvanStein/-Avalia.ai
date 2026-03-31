@@ -2,7 +2,10 @@ import fs from 'fs';
 import path from 'path';
 import { Pool } from 'pg';
 
-const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
+const pool = new Pool({ 
+  connectionString: process.env.POSTGRES_URL,
+  ssl: { rejectUnauthorized: false }
+});
 
 async function sql(strings: TemplateStringsArray, ...values: any[]) {
   const query = strings.reduce((acc, str, i) => acc + str + (i < values.length ? `$${i + 1}` : ''), '');
