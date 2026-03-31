@@ -1,3 +1,5 @@
+import "./globals.css";
+
 export const metadata = {
   title: 'Avalia.ai',
   description: 'Plataforma Pedagógica com IA',
