@@ -30,9 +30,8 @@ const DB_FILE = path.join(process.cwd(), 'mnt/user-data/db.json');
 
 const INITIAL_DB: any = {
   subjects:        [{ id: '1', name: 'Cálculo I', code: 'MAT101', syllabus: '' }],
-  students:        [{ id: 's1', name: 'Ana Souza', email: 'ana@example.com' }],
+  students:        [{ id: 's1', name: 'Ana Souza', email: 'ana@example.com', turma: 'Turma A' }],
   activities:      [{ id: 'a1', subjectId: '1', title: 'P1 - Derivadas', weight: 1, description: '' }],
-  turmas:          [],
   implementacoes:  [],
   submissions:     [],
 };
@@ -44,8 +43,8 @@ async function initPostgres() {
     try {
       await sql`CREATE TABLE IF NOT EXISTS subjects (id TEXT PRIMARY KEY, name TEXT, code TEXT, syllabus TEXT)`;
       await sql`CREATE TABLE IF NOT EXISTS students (id TEXT PRIMARY KEY, name TEXT, email TEXT)`;
+      try { await sql`ALTER TABLE students ADD COLUMN turma TEXT`; } catch (e) {}
       await sql`CREATE TABLE IF NOT EXISTS activities (id TEXT PRIMARY KEY, subject_id TEXT, title TEXT, weight FLOAT, description TEXT)`;
-      await sql`CREATE TABLE IF NOT EXISTS turmas (id TEXT PRIMARY KEY, name TEXT, student_ids TEXT)`;
       await sql`CREATE TABLE IF NOT EXISTS implementacoes (id TEXT PRIMARY KEY, title TEXT, description TEXT, status TEXT, priority TEXT, created_at TEXT)`;
       await sql`CREATE TABLE IF NOT EXISTS submissions (id TEXT PRIMARY KEY, student_name TEXT, subject TEXT, status TEXT, grade FLOAT, feedback TEXT, source TEXT, submitted_at TEXT)`;
       await sql`CREATE TABLE IF NOT EXISTS error_logs (id TEXT PRIMARY KEY, message TEXT, details TEXT, mode TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`;
@@ -73,7 +72,7 @@ function readDB(): any {
   return {
     ...INITIAL_DB,
     ...stored,
-    turmas:         stored.turmas         ?? [],
+    turmas:         [], // Ignored but kept to prevent null errors where accessed
     implementacoes: stored.implementacoes ?? [],
     error_logs:     logs,
   };
@@ -144,14 +143,14 @@ export const db = {
     }
     return readDB().students;
   },
-  addStudent: async (name: string, email: string, mode: 'local' | 'remote' = 'local') => {
+  addStudent: async (name: string, email: string, turma: string = '', mode: 'local' | 'remote' = 'local') => {
     const id = 's' + Date.now().toString();
     if (mode === 'remote') {
-      await sql`INSERT INTO students (id, name, email) VALUES (${id}, ${name}, ${email})`;
-      return { id, name, email };
+      await sql`INSERT INTO students (id, name, email, turma) VALUES (${id}, ${name}, ${email}, ${turma})`;
+      return { id, name, email, turma };
     }
     const data = readDB();
-    const newStudent = { id, name, email };
+    const newStudent = { id, name, email, turma };
     data.students.push(newStudent);
     saveDB(data);
     return newStudent;
@@ -197,46 +196,8 @@ export const db = {
     return readDB().activities.find((a: any) => a.title === title);
   },
 
-  // ── TURMAS ──────────────────────────────────────────────────────────────
-  getTurmas: async (mode: 'local' | 'remote' = 'local') => {
-    if (mode === 'remote') {
-      await initPostgres();
-      const { rows } = await sql`SELECT * FROM turmas`;
-      return rows.map((r: any) => ({ ...r, studentIds: JSON.parse(r.student_ids || '[]') }));
-    }
-    return readDB().turmas;
-  },
-  addTurma: async (name: string, studentIds: string[], mode: 'local' | 'remote' = 'local') => {
-    const id = 't' + Date.now().toString();
-    if (mode === 'remote') {
-      const sids = JSON.stringify(studentIds);
-      await sql`INSERT INTO turmas (id, name, student_ids) VALUES (${id}, ${name}, ${sids})`;
-      return { id, name, studentIds };
-    }
-    const data = readDB();
-    const newTurma = { id, name, studentIds };
-    data.turmas.push(newTurma);
-    saveDB(data);
-    return newTurma;
-  },
-  updateTurma: async (id: string, name: string, studentIds: string[], mode: 'local' | 'remote' = 'local') => {
-    if (mode === 'remote') {
-      const sids = JSON.stringify(studentIds);
-      await sql`UPDATE turmas SET name = ${name}, student_ids = ${sids} WHERE id = ${id}`;
-      return { id, name, studentIds };
-    }
-    const data = readDB();
-    const turma = data.turmas.find((t: any) => t.id === id);
-    if (turma) { turma.name = name; turma.studentIds = studentIds; }
-    saveDB(data);
-    return { id, name, studentIds };
-  },
-  deleteTurma: async (id: string, mode: 'local' | 'remote' = 'local') => {
-    if (mode === 'remote') { await sql`DELETE FROM turmas WHERE id = ${id}`; return { id }; }
-    const data = readDB();
-    data.turmas = data.turmas.filter((t: any) => t.id !== id);
-    saveDB(data); return { id };
-  },
+  // ── TURMAS (REMOVED) ────────────────────────────────────────────────────
+
 
   // ── IMPLEMENTAÇÕES ──────────────────────────────────────────────────────
   getImplementacoes: async (mode: 'local' | 'remote' = 'local') => {

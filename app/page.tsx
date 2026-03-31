@@ -5,12 +5,12 @@ import {
   Upload, BookOpen, CheckCircle, Clock, GraduationCap, Sparkles,
   Database, UserPlus, Plus, Trash2, AlertCircle, Layers, X,
   BarChart2, Users, Lightbulb, FileText, ChevronRight, Edit2,
-  ArrowRight, Check, RefreshCw,
+  ArrowRight, Check, RefreshCw, Copy
 } from "lucide-react";
 
 // ── TYPES ──────────────────────────────────────────────────────────────────
 interface Subject       { id: string; name: string; code: string; syllabus?: string; }
-interface Student       { id: string; name: string; email: string; }
+interface Student       { id: string; name: string; email: string; turma?: string; }
 interface Activity      { id: string; subjectId: string; title: string; weight: number; description?: string; }
 interface Turma         { id: string; name: string; studentIds: string[]; }
 interface Implementacao { id: string; title: string; description: string; status: string; priority: string; createdAt: string; }
@@ -88,7 +88,7 @@ function syllabusChunks(raw: string): string[] {
 
 // ── COMPONENT ─────────────────────────────────────────────────────────────
 export default function Dashboard() {
-  type View = 'dashboard'|'subjects'|'students'|'activities'|'turmas'|'batch'|'implementacoes';
+  type View = 'dashboard'|'subjects'|'students'|'activities'|'batch'|'implementacoes';
   const [view, setView] = useState<View>('dashboard');
   const [hasMounted, setHasMounted] = useState(false);
   const [dbData, setDbData] = useState<DBData>(EMPTY_DB);
@@ -106,17 +106,12 @@ export default function Dashboard() {
 
   // Student modal
   const [showStudentModal, setShowStudentModal] = useState(false);
-  const [newStuData, setNewStuData] = useState({ name: '', email: '' });
+  const [newStuData, setNewStuData] = useState({ name: '', email: '', turma: '' });
 
   // Activity modal
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [newActData, setNewActData] = useState({ subjectId: '', title: '', weight: 1, description: '' });
 
-  // Turma modal
-  const [showTurmaModal, setShowTurmaModal] = useState(false);
-  const [editTurma, setEditTurma] = useState<Turma | null>(null);
-  const [newTurmaName, setNewTurmaName] = useState('');
-  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
 
   // Implementation modal
   const [showImplModal, setShowImplModal] = useState(false);
@@ -181,6 +176,17 @@ export default function Dashboard() {
   };
 
   const del = async (entity: string, id: string) => {
+    // Validações antes da exclusão
+    if (entity === 'subject') {
+      const hasActs = dbData.activities.some(a => a.subjectId === id);
+      if (hasActs) return alert('Não é possível excluir: existem atividades vinculadas a esta matéria.');
+    }
+    if (entity === 'student') {
+      const studentName = dbData.students.find(s => s.id === id)?.name;
+      const hasSubs = dbData.submissions.some(s => s.studentName === studentName);
+      if (hasSubs) return alert('Não é possível excluir: o aluno possui avaliações/submissões cadastradas.');
+    }
+    
     if (!confirm('Confirma a exclusão?')) return;
     try { await apiDelete(entity, id); await fetchDB(); if (selected?.id === id) setSelected(null); }
     catch (e: any) { alert('Erro: ' + e.message); }
@@ -234,29 +240,6 @@ export default function Dashboard() {
     } catch (e: any) { alert('Erro: ' + e.message); }
   };
 
-  // ── TURMA ACTIONS ──────────────────────────────────────────────────────
-  const openNewTurma = () => {
-    setEditTurma(null); setNewTurmaName(''); setSelectedStudentIds([]);
-    setShowTurmaModal(true);
-  };
-  const openEditTurma = (t: Turma) => {
-    setEditTurma(t); setNewTurmaName(t.name); setSelectedStudentIds([...t.studentIds]);
-    setShowTurmaModal(true);
-  };
-  const saveTurma = async () => {
-    if (!newTurmaName) return alert('Informe o nome da turma');
-    try {
-      if (editTurma) {
-        await apiPost('turma-update', { id: editTurma.id, name: newTurmaName, studentIds: selectedStudentIds });
-      } else {
-        await apiPost('turma', { name: newTurmaName, studentIds: selectedStudentIds });
-      }
-      setShowTurmaModal(false); await fetchDB();
-    } catch (e: any) { alert('Erro: ' + e.message); }
-  };
-  const toggleStudentInTurma = (id: string) => {
-    setSelectedStudentIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  };
 
   // ── IMPLEMENTATION ACTIONS ─────────────────────────────────────────────
   const saveImpl = async () => {
@@ -379,7 +362,6 @@ export default function Dashboard() {
           <NavItem v="subjects"       icon={FileText}    label="Matérias"/>
           <NavItem v="students"       icon={UserPlus}    label="Alunos"/>
           <NavItem v="activities"     icon={Clock}       label="Atividades"/>
-          <NavItem v="turmas"         icon={Users}       label="Turmas"/>
           <p className="nav-label">Trabalho</p>
           <NavItem v="batch"          icon={Layers}      label="Correção em Lote"/>
           <p className="nav-label">Sistema</p>
@@ -418,9 +400,52 @@ export default function Dashboard() {
         {/* ══ DASHBOARD ══════════════════════════════════════════════════ */}
         {view === 'dashboard' && <>
           <header className="header">
-            <div><h1>Painel de Avaliações</h1><p className="subtitle">Base: <b>{dbMode === 'local' ? 'JSON Local' : 'Supabase'}</b> · {dbData.submissions.length} submissões</p></div>
+            <div><h1>Painel de Avaliações</h1><p className="subtitle">Visão Geral do Sistema</p></div>
             <button className="btn-primary" onClick={() => setShowUpload(true)}><Upload size={16}/> Novo Trabalho</button>
           </header>
+
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:16,marginBottom:24}} className="fade-in">
+            <div className="stat-card" style={{background:'var(--surface)',padding:16,borderRadius:12,border:'1px solid var(--border)'}}>
+              <h3 style={{fontSize:12,color:'var(--text2)',marginBottom:8}}>Total de Alunos</h3>
+              <p style={{fontSize:24,fontWeight:600}}>{dbData.students.length}</p>
+            </div>
+            <div className="stat-card" style={{background:'var(--surface)',padding:16,borderRadius:12,border:'1px solid var(--border)'}}>
+              <h3 style={{fontSize:12,color:'var(--text2)',marginBottom:8}}>Total de Matérias</h3>
+              <p style={{fontSize:24,fontWeight:600}}>{dbData.subjects.length}</p>
+            </div>
+            <div className="stat-card" style={{background:'var(--surface)',padding:16,borderRadius:12,border:'1px solid var(--border)'}}>
+              <h3 style={{fontSize:12,color:'var(--text2)',marginBottom:8}}>Total de Avaliações</h3>
+              <p style={{fontSize:24,fontWeight:600}}>{dbData.activities.length}</p>
+            </div>
+            <div className="stat-card" style={{background:'var(--surface)',padding:16,borderRadius:12,border:'1px solid var(--border)'}}>
+              <h3 style={{fontSize:12,color:'var(--text2)',marginBottom:8}}>Trabalhos Corrigidos</h3>
+              <p style={{fontSize:24,fontWeight:600}}>{dbData.submissions.filter(s => s.status === 'graded').length}</p>
+            </div>
+          </div>
+
+          <h2 style={{fontSize:16,marginBottom:12}}>3 Últimas Atividades Recentes</h2>
+          <div className="table-wrap fade-in" style={{marginBottom:32}}>
+            <table className="table">
+              <thead><tr><th>Título</th><th>Matéria</th><th>Peso</th></tr></thead>
+              <tbody>
+                {dbData.activities.slice(-3).reverse().map(a => {
+                  const sub = dbData.subjects.find(s => s.id === a.subjectId);
+                  return (
+                    <tr key={a.id}>
+                      <td className="td-name">{a.title}</td>
+                      <td><span className="badge-subject">{sub?.name ?? a.subjectId}</span></td>
+                      <td className="td-muted">{a.weight}×</td>
+                    </tr>
+                  );
+                })}
+                {dbData.activities.length === 0 && (
+                  <tr><td colSpan={3}><div className="empty-state"><span style={{fontSize:13,color:'var(--text2)'}}>Nenhuma atividade cadastrada.</span></div></td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <h2 style={{fontSize:16,marginBottom:12}}>Submissões (Corrigidas ou Em Fila)</h2>
           <div className="table-wrap fade-in">
             <table className="table">
               <thead><tr><th>Aluno</th><th>Matéria</th><th>Status</th><th>Nota</th><th>Data</th><th></th></tr></thead>
@@ -493,20 +518,19 @@ export default function Dashboard() {
           </header>
           <div className="table-wrap fade-in">
             <table className="table">
-              <thead><tr><th>Nome</th><th>Email</th><th>Turmas</th><th></th></tr></thead>
+              <thead><tr><th>Nome</th><th>Email</th><th>Turma</th><th></th></tr></thead>
               <tbody>
                 {dbData.students.length === 0
                   ? <tr><td colSpan={4}><div className="empty-state"><UserPlus size={40}/><p>Nenhum aluno nesta base.</p></div></td></tr>
                   : dbData.students.map(s => {
-                    const turmas = dbData.turmas.filter(t => t.studentIds.includes(s.id));
                     return (
                       <tr key={s.id}>
                         <td className="td-name">{s.name}</td>
                         <td className="td-muted">{s.email}</td>
                         <td>
-                          {turmas.length === 0
+                          {!s.turma
                             ? <span style={{fontSize:11,color:'var(--text2)'}}>Sem turma</span>
-                            : turmas.map(t => <span key={t.id} className="badge badge-blue" style={{marginRight:4}}>{t.name}</span>)
+                            : <span className="badge badge-blue">{s.turma}</span>
                           }
                         </td>
                         <td><div className="actions"><button className="btn-icon-danger" onClick={() => del('student', s.id)}><Trash2 size={14}/></button></div></td>
@@ -549,42 +573,7 @@ export default function Dashboard() {
           </div>
         </>}
 
-        {/* ══ TURMAS ════════════════════════════════════════════════════= */}
-        {view === 'turmas' && <>
-          <header className="header">
-            <div><h1>Turmas</h1><p className="subtitle">{dbData.turmas.length} turmas · {dbMode === 'local' ? 'Local' : 'Nuvem'}</p></div>
-            <button className="btn-primary" onClick={openNewTurma}><Plus size={16}/> Nova Turma</button>
-          </header>
 
-          {dbData.turmas.length === 0
-            ? <div className="empty-state" style={{border:'2px dashed var(--border)',borderRadius:12,height:300}}><Users size={48}/><p>Nenhuma turma. Clique em <b>Nova Turma</b> para começar.</p></div>
-            : <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:14}} className="fade-in">
-                {dbData.turmas.map(t => {
-                  const members = dbData.students.filter(s => t.studentIds.includes(s.id));
-                  return (
-                    <div key={t.id} style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:12,padding:18}}>
-                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12}}>
-                        <div>
-                          <p style={{fontWeight:600,fontSize:15}}>{t.name}</p>
-                          <p style={{fontSize:11.5,color:'var(--text2)',marginTop:2}}>{members.length} aluno{members.length !== 1 ? 's':''}</p>
-                        </div>
-                        <div style={{display:'flex',gap:4}}>
-                          <button className="btn-icon" onClick={() => openEditTurma(t)}><Edit2 size={14}/></button>
-                          <button className="btn-icon-danger" onClick={() => del('turma', t.id)}><Trash2 size={14}/></button>
-                        </div>
-                      </div>
-                      <div className="turma-avatars">
-                        {members.length === 0
-                          ? <span style={{fontSize:11.5,color:'var(--text2)'}}>Sem alunos associados</span>
-                          : members.map(s => <span key={s.id} className="turma-avatar">{s.name}</span>)
-                        }
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-          }
-        </>}
 
         {/* ══ CORREÇÃO EM LOTE ══════════════════════════════════════════= */}
         {view === 'batch' && <>
@@ -734,9 +723,14 @@ export default function Dashboard() {
                       <div key={imp.id} className="kanban-card" onClick={() => cycleStatus(imp)}>
                         <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:4}}>
                           <p className="kanban-card-title">{imp.title}</p>
-                          <button className="btn-icon-danger" style={{flexShrink:0}} onClick={e => { e.stopPropagation(); del('implementacao', imp.id); }}>
-                            <Trash2 size={12}/>
-                          </button>
+                          <div style={{display:'flex',gap:4}}>
+                            <button className="btn-icon" style={{flexShrink:0}} onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(`${imp.title}\n${imp.description||''}`); alert('Ideia Copiada!'); }}>
+                              <Copy size={12}/>
+                            </button>
+                            <button className="btn-icon-danger" style={{flexShrink:0}} onClick={e => { e.stopPropagation(); del('implementacao', imp.id); }}>
+                              <Trash2 size={12}/>
+                            </button>
+                          </div>
                         </div>
                         {imp.description && <p className="kanban-card-desc">{imp.description}</p>}
                         <div className="kanban-card-footer">
@@ -841,11 +835,13 @@ export default function Dashboard() {
             <input className="input" placeholder="Ex: Maria Silva" value={newStuData.name} onChange={e => setNewStuData({...newStuData, name: e.target.value})}/>
             <label className="field-label">Email</label>
             <input className="input" placeholder="Ex: maria@email.com" value={newStuData.email} onChange={e => setNewStuData({...newStuData, email: e.target.value})}/>
+            <label className="field-label">Turma (opcional)</label>
+            <input className="input" placeholder="Ex: Turma A" value={newStuData.turma} onChange={e => setNewStuData({...newStuData, turma: e.target.value})}/>
             <div className="modal-actions">
               <button className="btn-ghost" onClick={() => setShowStudentModal(false)}>Cancelar</button>
               <button className="btn-primary" onClick={async () => {
                 if (!newStuData.name) return;
-                try { await apiPost('student', newStuData); setShowStudentModal(false); setNewStuData({name:'',email:''}); await fetchDB(); }
+                try { await apiPost('student', newStuData); setShowStudentModal(false); setNewStuData({name:'',email:'',turma:''}); await fetchDB(); }
                 catch (e: any) { alert(e.message); }
               }}>Salvar</button>
             </div>
@@ -879,50 +875,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ══ MODAL: TURMA ═════════════════════════════════════════════════ */}
-      {showTurmaModal && (
-        <div className="modal-overlay">
-          <div className="modal modal-wide">
-            <div className="modal-header">
-              <h2>{editTurma ? 'Editar Turma' : 'Nova Turma'}</h2>
-              <button className="btn-close" onClick={() => setShowTurmaModal(false)}>✕</button>
-            </div>
-            <label className="field-label">Nome da turma</label>
-            <input className="input" placeholder="Ex: Turma A · 2025.1" value={newTurmaName} onChange={e => setNewTurmaName(e.target.value)}/>
-            
-            <label className="field-label">
-              Alunos associados ({selectedStudentIds.length}/{dbData.students.length} selecionados)
-            </label>
-            {dbData.students.length === 0
-              ? <p style={{fontSize:12.5,color:'var(--text2)',padding:'12px 0'}}>Nenhum aluno cadastrado. Cadastre alunos primeiro.</p>
-              : <div className="student-grid">
-                  {dbData.students.map(s => {
-                    const isSelected = selectedStudentIds.includes(s.id);
-                    return (
-                      <div key={s.id} className={`student-chip ${isSelected ? 'selected' : ''}`} onClick={() => toggleStudentInTurma(s.id)}>
-                        <div className="student-chip-check">
-                          {isSelected && <Check size={10} color="#fff"/>}
-                        </div>
-                        <div style={{overflow:'hidden'}}>
-                          <p style={{fontSize:12.5,fontWeight:isSelected?500:400,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.name}</p>
-                          <p style={{fontSize:10.5,color:'var(--text2)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.email}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-            }
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:4}}>
-              <button className="btn-ghost" style={{fontSize:11.5,padding:'6px 12px'}} onClick={() => setSelectedStudentIds(dbData.students.map(s => s.id))}>Selecionar todos</button>
-              <button className="btn-ghost" style={{fontSize:11.5,padding:'6px 12px'}} onClick={() => setSelectedStudentIds([])}>Limpar seleção</button>
-            </div>
-            <div className="modal-actions">
-              <button className="btn-ghost" onClick={() => setShowTurmaModal(false)}>Cancelar</button>
-              <button className="btn-primary" onClick={saveTurma}>{editTurma ? 'Salvar Alterações' : 'Criar Turma'}</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ══ MODAL: NOVA IMPLEMENTAÇÃO ════════════════════════════════════ */}
       {showImplModal && (

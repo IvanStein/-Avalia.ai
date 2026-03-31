@@ -7,16 +7,15 @@ export async function GET(req: NextRequest) {
   const mode = (req.nextUrl.searchParams.get('mode') as 'local' | 'remote') || 'local';
 
   try {
-    const [subjects, students, activities, turmas, implementacoes, submissions] = await Promise.all([
+    const [subjects, students, activities, implementacoes, submissions] = await Promise.all([
       db.getSubjects(mode),
       db.getStudents(mode),
       db.getActivities(mode),
-      db.getTurmas(mode),
       db.getImplementacoes(mode),
       db.getSubmissions(mode),
     ]);
 
-    return NextResponse.json({ subjects, students, activities, turmas, implementacoes, submissions });
+    return NextResponse.json({ subjects, students, activities, turmas: [], implementacoes, submissions });
   } catch (err: any) {
     console.error('API GET DB Error:', err);
     await db.logError(err?.message || 'Erro Desconhecido no GET Inicial', JSON.stringify({ stack: err?.stack, action: 'GET' }), mode);
@@ -38,16 +37,10 @@ export async function POST(req: NextRequest) {
         result = await db.updateSubjectSyllabus(data.id, data.syllabus, mode);
         break;
       case 'student':
-        result = await db.addStudent(data.name, data.email, mode);
+        result = await db.addStudent(data.name, data.email, data.turma || '', mode);
         break;
       case 'activity':
         result = await db.addActivity(data.subjectId, data.title, data.weight, data.description || '', mode);
-        break;
-      case 'turma':
-        result = await db.addTurma(data.name, data.studentIds || [], mode);
-        break;
-      case 'turma-update':
-        result = await db.updateTurma(data.id, data.name, data.studentIds || [], mode);
         break;
       case 'implementacao':
         result = await db.addImplementacao(data.title, data.description, data.priority || 'media', mode);
@@ -79,7 +72,6 @@ export async function DELETE(req: NextRequest) {
       case 'subject':     result = await db.deleteSubject(id, mode);       break;
       case 'student':     result = await db.deleteStudent(id, mode);       break;
       case 'activity':    result = await db.deleteActivity(id, mode);      break;
-      case 'turma':       result = await db.deleteTurma(id, mode);         break;
       case 'implementacao': result = await db.deleteImplementacao(id, mode); break;
       case 'submission':  result = await db.deleteSubmission(id, mode);    break;
       default:
