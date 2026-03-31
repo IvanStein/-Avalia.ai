@@ -1,0 +1,27 @@
+{
+  "name": "avalia-ai",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "chroma": "docker run -p 8000:8000 chromadb/chroma"
+  },
+  "dependencies": {
+    "next": "14.2.5",
+    "react": "^18",
+    "react-dom": "^18",
+    "@google/generative-ai": "^0.15.0",
+    "chromadb": "^1.8.1",
+    "pdf-parse": "^1.1.1",
+    "lucide-react": "^0.400.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "typescript": "^5"
+  }
+}
