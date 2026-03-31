@@ -397,6 +397,9 @@ export default function Dashboard() {
           </div>
           <ModeBar/>
         </div>
+        <div style={{marginTop: 'auto', paddingTop: 16, borderTop: '1px solid var(--border)', textAlign: 'center', fontSize: 10, color: 'var(--text2)', fontFamily: 'monospace'}}>
+          v0.1.0-alpha.1
+        </div>
       </aside>
 
       {/* ── MAIN ────────────────────────────────────────────────────────── */}

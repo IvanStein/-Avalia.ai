@@ -1,6 +1,13 @@
 import fs from 'fs';
 import path from 'path';
-import { sql } from '@vercel/postgres';
+import { Pool } from 'pg';
+
+const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
+
+async function sql(strings: TemplateStringsArray, ...values: any[]) {
+  const query = strings.reduce((acc, str, i) => acc + str + (i < values.length ? `$${i + 1}` : ''), '');
+  return await pool.query(query, values);
+}
 
 const DB_FILE = path.join(process.cwd(), 'mnt/user-data/db.json');
 
