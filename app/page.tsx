@@ -94,6 +94,11 @@ function cleanFilenameForName(filename: string) {
   return clean.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
 }
 
+function getActName(feedback: string) {
+  const fl = (feedback ?? '').split('\n')[0];
+  return fl.includes('Atividade:') ? fl.replace('Atividade:', '').trim() : null;
+}
+
 function syllabusChunks(raw: string): string[] {
   try { return JSON.parse(raw) as string[]; } catch { return raw ? [raw] : []; }
 }
@@ -634,7 +639,10 @@ export default function Dashboard() {
       .sort((a,b) => a.name.localeCompare(b.name))
       .map(stu => {
         const submission = dbData.submissions.find(sub => 
-          sub.studentName === stu.name && sub.subject === subject.name && sub.status === 'graded'
+          sub.studentName === stu.name && 
+          sub.subject === subject.name && 
+          sub.status === 'graded' &&
+          getActName(sub.feedback || '') === activity.title
         );
         
         const gradeValue = submission ? (submission.grade?.toFixed(2).replace('.', ',')) : "0,00";
@@ -916,7 +924,7 @@ export default function Dashboard() {
                       s.subject === rSubject?.name &&
                       getActName(s.feedback ?? '') === act.title
                     );
-                    if (!sub) { faltas++; return `<td class="miss">—</td>`; }
+                    if (!sub) { faltas += 2; return `<td class="miss">—</td>`; }
                     const g = sub.grade ?? 0;
                     const cls = g >= 7 ? 'high' : g >= 5 ? 'mid' : 'low';
                     return `<td class="grade ${cls}">${g.toFixed(1)}</td>`;
@@ -926,6 +934,13 @@ export default function Dashboard() {
                 </tbody></table>`;
             } else {
               tableHtml = `
+                <div style="display:flex;gap:12px;margin-bottom:16px">
+                  <div style="background:#f4f4f4;padding:12px 18px;border-radius:6px"><b style="font-size:20px">${detailRows.length}</b><br><span style="font-size:10px;color:#666">Correções</span></div>
+                  <div style="background:#f4f4f4;padding:12px 18px;border-radius:6px"><b style="font-size:20px;color:${avg >= 7 ? '#059669' : avg >= 5 ? '#d97706' : '#dc2626'}">${avg.toFixed(1)}</b><br><span style="font-size:10px;color:#666">Média</span></div>
+                  <div style="background:#f4f4f4;padding:12px 18px;border-radius:6px"><b style="font-size:20px;color:#059669">${max.toFixed(1)}</b><br><span style="font-size:10px;color:#666">Maior Nota</span></div>
+                  <div style="background:#f4f4f4;padding:12px 18px;border-radius:6px"><b style="font-size:20px;color:#dc2626">${min.toFixed(1)}</b><br><span style="font-size:10px;color:#666">Menor Nota</span></div>
+                  <div style="background:#f4f4f4;padding:12px 18px;border-radius:6px"><b style="font-size:20px;color:#059669">${passing}/${grades.length}</b><br><span style="font-size:10px;color:#666">Aprovados</span></div>
+                </div>
                 <table><thead><tr><th>#</th><th>Aluno</th><th>Atividade</th><th>Nota</th><th>Data</th></tr></thead>
                 <tbody>${detailRows.map((s,i) => {
                   const an = getActName(s.feedback ?? '') ?? 'Geral';
@@ -936,6 +951,7 @@ export default function Dashboard() {
             }
 
             const html = `<html><head><title>Relatório</title><style>
+              @page { size: landscape; margin: 1cm; }
               body{font-family:Arial,sans-serif;font-size:11px;padding:20px;color:#111}
               h1{font-size:16px;margin-bottom:2px}p.sub{color:#666;margin-bottom:12px}
               .stats{display:flex;gap:16px;margin-bottom:16px}
@@ -1399,7 +1415,7 @@ export default function Dashboard() {
                         <select className="input" style={{ fontSize: 12, padding: '5px 10px' }}
                           value={entry.studentId}
                           onChange={e => updateBatch(entry.id, { studentId: e.target.value })}>
-                          <option value="">Selecionar alunoâ€¦</option>
+                          <option value="">Selecionar aluno...</option>
                           {dbData.students
                             .filter(s => !batchSubjectId || (s.subjectIds || []).includes(batchSubjectId))
                             .sort((a,b) => a.name.localeCompare(b.name))
@@ -1662,8 +1678,12 @@ export default function Dashboard() {
                       .sort((a,b) => a.name.localeCompare(b.name))
                       .map(stu => {
                         const subName = dbData.subjects.find(s => s.id === copySubjectId)?.name;
+                        const selectedAct = dbData.activities.find(a => a.id === copyActivityId);
                         const matchingSubmission = dbData.submissions.find(sub => 
-                          sub.studentName === stu.name && sub.subject === subName && sub.status === 'graded'
+                          sub.studentName === stu.name && 
+                          sub.subject === subName && 
+                          sub.status === 'graded' &&
+                          getActName(sub.feedback || '') === selectedAct?.title
                         );
 
                         const gradeValue = matchingSubmission ? matchingSubmission.grade?.toFixed(1) : "0.0";
@@ -1953,7 +1973,7 @@ export default function Dashboard() {
               </div>
               <div style={{ fontSize: 12, padding: '10px 16px', background: 'var(--surface2)', borderRadius: 8, color: 'var(--text2)', border: '1px solid var(--border)' }}>
                 {dbMode === 'remote' 
-                  ? 'âœ“ Modo Nuvem ativo: Sincronização em tempo real e persistência global habilitada.' 
+                  ? '✅ Modo Nuvem ativo: Sincronização em tempo real e persistência global habilitada.' 
                   : 'âš  Modo Local ativo: Os dados serão salvos apenas no sistema de arquivos deste servidor local.'}
               </div>
             </div>
@@ -2019,7 +2039,7 @@ export default function Dashboard() {
         <aside className="detail-panel">
           <div className="detail-header">
             <div><h2>{selected.studentName}</h2><p className="subtitle">{selected.subject}</p></div>
-            <button className="btn-close" onClick={() => setSelected(null)}>âœ•</button>
+            <button className="btn-close" onClick={() => setSelected(null)}>×</button>
           </div>
           {selected.grade != null && (
             <div className="grade-circle"><span className="grade-big">{selected.grade.toFixed(1)}</span><span className="grade-label">/ 10</span></div>
@@ -2041,7 +2061,7 @@ export default function Dashboard() {
       {showSubjectModal && (
         <div className="modal-overlay">
           <div className="modal">
-            <div className="modal-header"><h2>{editingSubject ? 'Editar Matéria' : 'Nova Matéria'}</h2><button className="btn-close" onClick={() => setShowSubjectModal(false)}>âœ•</button></div>
+            <div className="modal-header"><h2>{editingSubject ? 'Editar Matéria' : 'Nova Matéria'}</h2><button className="btn-close" onClick={() => setShowSubjectModal(false)}>×</button></div>
             <label className="field-label">Nome da disciplina</label>
             <input className="input" placeholder="Ex: Cálculo III" value={newSubData.name} onChange={e => setNewSubData({...newSubData, name: e.target.value})}/>
             <label className="field-label">Código</label>
@@ -2064,13 +2084,13 @@ export default function Dashboard() {
           <div className="modal">
             <div className="modal-header">
               <h2>Importar Ementa</h2>
-              <button className="btn-close" onClick={() => setSyllabusTarget(null)}>âœ•</button>
+              <button className="btn-close" onClick={() => setSyllabusTarget(null)}>×</button>
             </div>
             <p style={{fontSize:13,color:'var(--text2)'}}>Matéria: <b style={{color:'var(--text)'}}>{syllabusTarget.name}</b></p>
             {syllabusChunks(syllabusTarget.syllabus ?? '').length > 0 && (
               <div>
                 <p style={{fontSize:11.5,color:'var(--text2)',marginBottom:6}}>Ementa atual ({syllabusChunks(syllabusTarget.syllabus ?? '').length} chunks):</p>
-                <div className="syllabus-preview">{syllabusChunks(syllabusTarget.syllabus ?? '')[0]?.slice(0,300)}â€¦</div>
+                <div className="syllabus-preview">{syllabusChunks(syllabusTarget.syllabus ?? '')[0]?.slice(0,300)}...</div>
               </div>
             )}
             <label className="drop-zone" onClick={() => document.getElementById('syllabus-imp')?.click()} style={{cursor:'pointer'}}>
@@ -2078,7 +2098,7 @@ export default function Dashboard() {
               <input id="syllabus-imp" type="file" accept=".pdf" style={{display:'none'}}
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleSyllabusImport(syllabusTarget, f); }}/>
             </label>
-            {syllabusUploading && <div style={{display:'flex',alignItems:'center',gap:8,fontSize:13,color:'var(--text2)'}}><Sparkles size={15} className="spin"/> Processando PDF em chunksâ€¦</div>}
+            {syllabusUploading && <div style={{display:'flex',alignItems:'center',gap:8,fontSize:13,color:'var(--text2)'}}><Sparkles size={15} className="spin"/> Processando PDF em chunks...</div>}
             <div className="modal-actions"><button className="btn-ghost" onClick={() => setSyllabusTarget(null)}>Fechar</button></div>
           </div>
         </div>
@@ -2087,7 +2107,7 @@ export default function Dashboard() {
       {showStudentModal && (
         <div className="modal-overlay">
           <div className="modal">
-            <div className="modal-header"><h2>{editingStudent ? 'Editar Aluno' : 'Novo Aluno'}</h2><button className="btn-close" onClick={() => setShowStudentModal(false)}>âœ•</button></div>
+            <div className="modal-header"><h2>{editingStudent ? 'Editar Aluno' : 'Novo Aluno'}</h2><button className="btn-close" onClick={() => setShowStudentModal(false)}>×</button></div>
             <label className="field-label">Nome completo</label>
             <input className="input" placeholder="Ex: MariaSilva" value={newStuData.name} onChange={e => setNewStuData({...newStuData, name: e.target.value})}/>
             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12}}>
@@ -2113,10 +2133,10 @@ export default function Dashboard() {
       {showActivityModal && (
         <div className="modal-overlay">
           <div className="modal">
-            <div className="modal-header"><h2>{editingActivity ? 'Editar Atividade' : 'Nova Atividade'}</h2><button className="btn-close" onClick={() => setShowActivityModal(false)}>âœ•</button></div>
+            <div className="modal-header"><h2>{editingActivity ? 'Editar Atividade' : 'Nova Atividade'}</h2><button className="btn-close" onClick={() => setShowActivityModal(false)}>×</button></div>
             <label className="field-label">Matéria</label>
             <select className="input" value={newActData.subjectId} onChange={e => setNewActData({...newActData, subjectId: e.target.value})}>
-              <option value="">Selecioneâ€¦</option>
+              <option value="">Selecione...</option>
               {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
             <label className="field-label">Título</label>
@@ -2152,7 +2172,7 @@ export default function Dashboard() {
               {newImpl.imageUrl && (
                 <div style={{position:'relative',width:50,height:50,borderRadius:4,overflow:'hidden',border:'1px solid var(--surface2)'}}>
                   <img src={newImpl.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover'}} alt=""/>
-                  <button onClick={() => setNewImpl({...newImpl, imageUrl: ''})} style={{position:'absolute',top:0,right:0,background:'rgba(0,0,0,0.5)',color:'white',border:'none',cursor:'pointer',fontSize:10}}>âœ•</button>
+                  <button onClick={() => setNewImpl({...newImpl, imageUrl: ''})} style={{position:'absolute',top:0,right:0,background:'rgba(0,0,0,0.5)',color:'white',border:'none',cursor:'pointer',fontSize:10}}>×</button>
                 </div>
               )}
             </div>
@@ -2178,7 +2198,7 @@ export default function Dashboard() {
           <div className="modal" style={{ maxWidth: 800 }}>
             <div className="modal-header">
               <h2>Importar Atividades da Ementa</h2>
-              <button className="btn-close" onClick={() => setShowImportActModal(false)}>âœ•</button>
+              <button className="btn-close" onClick={() => setShowImportActModal(false)}>×</button>
             </div>
             
             <label className="field-label">1. Selecione a Matéria de destino</label>
@@ -2195,14 +2215,14 @@ export default function Dashboard() {
                 }
               }
             }}>
-              <option value="">Selecioneâ€¦</option>
+              <option value="">Selecione...</option>
               {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
 
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:16, marginBottom:8}}>
                <label className="field-label" style={{margin:0}}>2. Texto da ementa (Contendo as A.A)</label>
                {newActData.subjectId && dbData.subjects.find(s => s.id === newActData.subjectId)?.syllabus && (
-                 <span style={{fontSize:10, color:'#10b981', fontWeight:600}}>âœ“ Texto carregado automaticamente da ementa PDF</span>
+                 <span style={{fontSize:10, color:'#10b981', fontWeight:600}}>✅ Texto carregado automaticamente da ementa PDF</span>
                )}
             </div>
             <textarea 
@@ -2256,16 +2276,16 @@ export default function Dashboard() {
             <div className="modal-header"><h2>Novo Trabalho</h2><button className="btn-close" onClick={() => setShowUpload(false)}>âœ•</button></div>
             <label className="field-label">Aluno</label>
             <select className="input" value={uploadName} onChange={e => setUploadName(e.target.value)}>
-              <option value="">Selecioneâ€¦</option>
+              <option value="">Selecione...</option>
               {dbData.students.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
             </select>
             <label className="field-label">Matéria</label>
             <select className="input" value={uploadSubject} onChange={e => setUploadSubject(e.target.value)}>
-              <option value="">Selecioneâ€¦</option>
+              <option value="">Selecione...</option>
               {dbData.subjects.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
             </select>
             <label className="drop-zone" style={{cursor:'pointer'}} onClick={() => document.getElementById('file-input')?.click()}>
-              <Upload size={22}/><span>{uploading ? 'Processandoâ€¦' : 'Clique ou arraste o PDF'}</span>
+              <Upload size={22}/><span>{uploading ? 'Processando...' : 'Clique ou arraste o PDF'}</span>
               <input id="file-input" type="file" accept=".pdf" style={{display:'none'}} onChange={e => e.target.files?.[0] && handleFileUpload(e.target.files[0])}/>
             </label>
             <div className="modal-actions"><button className="btn-ghost" onClick={() => setShowUpload(false)}>Cancelar</button></div>
