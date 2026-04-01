@@ -57,13 +57,14 @@ export async function POST(req: NextRequest) {
       rag_context: pedagogicalContext,
     });
 
-    // 5. Salvar no Banco (Persistência Automática)
+    // 5. Salvar no Banco (CRITICAL: prefix feedback with activity title for dashboard grouping)
+    const activityPrefix = activityTitle ? `Atividade: ${activityTitle}\n` : '';
     const newSubmission = await db.addSubmission({
       studentName,
       subject,
       status: "graded",
       grade: parsed.grade,
-      feedback: parsed.feedback,
+      feedback: activityPrefix + parsed.feedback,
       source: file ? "pdf" : "drive",
       submittedAt: new Date().toISOString().split("T")[0]
     }, mode);

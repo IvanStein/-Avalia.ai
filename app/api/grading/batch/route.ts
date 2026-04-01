@@ -42,9 +42,13 @@ async function gradeOne(
     ]);
 
     const pedagogicalContext = `
-      Ementa da Matéria: ${subDetails?.code || "N/A"} - ${subDetails?.name || "N/A"}
-      Objetivos da Atividade: ${actDetails?.title || "Dissertação Geral"}
-      Critérios: ${(actDetails as any)?.description || "Avaliar clareza, coesão e domínio técnico."}
+    ## 1. Contexto Pedagógico
+- Matéria: ${item.subject}
+- Ementa da Matéria: ${subDetails?.syllabus || "Não fornecida"}
+- Descritivo da Atividade (CONCENTRE-SE AQUI): ${(actDetails as any)?.description || "Não fornecido"}
+
+## 2. Padrões Adicionais de Avaliação (RAG):
+Avaliar clareza, coesão e domínio técnico.
     `;
 
     let studentText = "";
@@ -59,17 +63,21 @@ async function gradeOne(
     const parsed = await runSkill(SKILLS.GRADE_DISSERTATIVE, {
       student_name: item.studentName,
       subject: item.subject,
+      syllabus: subDetails?.syllabus,
+      activity_description: (actDetails as any)?.description,
       student_text: studentText,
       rag_context: pedagogicalContext,
     });
 
+    // CRITICAL: Prefix feedback with activity title so dashboard grouping works
+    const activityPrefix = item.activity ? `Atividade: ${item.activity}\n` : '';
     const newSubmission = await db.addSubmission(
       {
         studentName: item.studentName,
         subject: item.subject,
         status: "graded",
         grade: parsed.grade,
-        feedback: parsed.feedback,
+        feedback: activityPrefix + parsed.feedback,
         source: item.file ? "pdf" : "drive",
         submittedAt: new Date().toISOString().split("T")[0],
       },
