@@ -452,9 +452,9 @@ export default function Dashboard() {
   };
 
   // ── SETTINGS ──────────────────────────────────────────────────────────
-  const saveSettings = async () => {
+  const saveSettings = async (configsToSave?: AppConfig) => {
     try {
-      await apiPost('configs', tempConfigs);
+      await apiPost('configs', configsToSave || tempConfigs);
       alert('Configurações salvas!');
       await fetchDB();
     } catch (e: any) { alert('Erro: ' + e.message); }
