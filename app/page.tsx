@@ -5,15 +5,15 @@ import {
   Upload, BookOpen, CheckCircle, Clock, GraduationCap, Sparkles,
   Database, UserPlus, Plus, Trash2, AlertCircle, Layers, X,
   BarChart2, Users, Lightbulb, FileText, ChevronRight, Edit2,
-  ArrowRight, Check, RefreshCw, Copy
+  ArrowRight, Check, RefreshCw, Copy, Hash
 } from "lucide-react";
 
 // ── TYPES ──────────────────────────────────────────────────────────────────
 interface Subject       { id: string; name: string; code: string; syllabus?: string; closed?: boolean; }
-interface Student       { id: string; name: string; email: string; turma?: string; subjectIds?: string[]; }
+interface Student       { id: string; name: string; email: string; ra?: string; turma?: string; subjectIds?: string[]; }
 interface Activity      { id: string; subjectId: string; title: string; weight: number; description?: string; }
 interface Implementacao { id: string; title: string; description: string; status: string; priority: string; createdAt: string; category?: string; imageUrl?: string; }
-interface AppConfig     { system_name: string; primary_color: string; }
+interface AppConfig     { system_name: string; primary_color: string; institution?: string; professor?: string; }
 interface Turma         { id: string; name: string; studentIds: string[]; }
 interface Implementacao { id: string; title: string; description: string; status: string; priority: string; createdAt: string; }
 interface Submission    { id: string; studentName: string; subject: string; submittedAt: string; status: 'pending'|'grading'|'graded'|'error'; grade?: number; feedback?: string; source: 'pdf'|'drive'; }
@@ -100,11 +100,11 @@ function syllabusChunks(raw: string): string[] {
 
 // ── COMPONENT ─────────────────────────────────────────────────────────────
 export default function Dashboard() {
-  type View = 'dashboard'|'subjects'|'students'|'enrollment'|'activities'|'batch'|'implementacoes'|'settings';
+  type View = 'dashboard'|'subjects'|'students'|'enrollment'|'activities'|'batch'|'implementacoes'|'settings'|'copy'|'reports';
   const [view, setView] = useState<View>('dashboard');
   const [hasMounted, setHasMounted] = useState(false);
   const [dbData, setDbData] = useState<DBData>(EMPTY_DB);
-  const [dbMode, setDbMode] = useState<'local'|'remote'>('local');
+  const [dbMode, setDbMode] = useState<'local'|'remote'>('remote');
   const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<Submission | null>(null);
@@ -128,7 +128,7 @@ export default function Dashboard() {
   const [syllabusUploading, setSyllabusUploading] = useState(false);
   const [syllabusTarget, setSyllabusTarget] = useState<Subject | null>(null);
 
-  const [newStuData, setNewStuData] = useState({ name: '', email: '', turma: '' });
+  const [newStuData, setNewStuData] = useState({ name: '', email: '', ra: '', turma: '' });
   const [newActData, setNewActData] = useState({ subjectId: '', title: '', weight: 1, description: '' });
   const [newImpl, setNewImpl] = useState({ title: '', description: '', priority: 'media', category: '', imageUrl: '' });
   const [tempConfigs, setTempConfigs] = useState<AppConfig>(EMPTY_DB.configs);
@@ -146,8 +146,17 @@ export default function Dashboard() {
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchReport, setBatchReport] = useState<{ succeeded: number; failed: number } | null>(null);
   const [batchSubjectId, setBatchSubjectId] = useState('');
+  const [batchActivityId, setBatchActivityId] = useState('');
+  const [batchStep, setBatchStep] = useState<'upload'|'validate'|'results'>('upload');
 
-  // ── FETCH ──────────────────────────────────────────────────────────────
+  const [copySubjectId, setCopySubjectId] = useState('');
+  const [copyActivityId, setCopyActivityId] = useState('');
+
+  // Reports state
+  const [reportType, setReportType] = useState<'activity'|'subject'>('subject');
+  const [reportSubjectId, setReportSubjectId] = useState('');
+  const [reportActivityId, setReportActivityId] = useState('');
+
   const fetchDB = useCallback(async () => {
     setLoading(true);
     setLoadError('');
@@ -164,6 +173,21 @@ export default function Dashboard() {
         submissions:     data.submissions     ?? [],
         configs:         data.configs         ?? EMPTY_DB.configs,
       });
+      
+      // Batch state handling
+      try {
+        const batchRes = await fetch(`/api/db?mode=${dbMode}&action=batch-state-get`);
+        if (batchRes.ok) {
+            const bState = await batchRes.json();
+            if (bState) {
+              setBatchEntries(bState.entries || []);
+              setBatchStep(bState.step || 'upload');
+              setBatchSubjectId(bState.subjectId || '');
+              setBatchActivityId(bState.activityId || '');
+            }
+        }
+      } catch(e) { console.error("Failed to load batch state", e); }
+      
       setTempConfigs(data.configs ?? EMPTY_DB.configs);
     } catch (e: any) {
       setLoadError(e.message);
@@ -211,6 +235,24 @@ export default function Dashboard() {
     catch (e: any) { alert('Erro: ' + e.message); }
   };
 
+  const deleteActivityCorrections = async (subjectName: string, activityName: string) => {
+    if (!confirm(`Deseja apagar TODAS as correções da atividade "${activityName}" na matéria "${subjectName}"? Esta ação é irreversível.`)) return;
+    setLoading(true);
+    try {
+      const subsToRemove = dbData.submissions.filter(s => s.subject === subjectName && (
+        (s.feedback?.split('\n')[0]?.includes('Atividade:') && s.feedback.split('\n')[0].replace('Atividade:', '').trim() === activityName) ||
+        (activityName === 'Geral' && !s.feedback?.split('\n')[0]?.includes('Atividade:'))
+      ));
+      
+      for (const sub of subsToRemove) {
+        await apiDelete('submission', sub.id);
+      }
+      alert(`${subsToRemove.length} correções foram apagadas.`);
+      await fetchDB();
+    } catch (e: any) { alert('Erro: ' + e.message); }
+    finally { setLoading(false); }
+  };
+
   // ── SUBJECT ACTIONS ────────────────────────────────────────────────────
   const openSubjectModal = (s?: Subject) => {
     if (s) { setEditingSubject(s); setNewSubData({ name: s.name, code: s.code }); }
@@ -255,9 +297,29 @@ export default function Dashboard() {
 
   // ── STUDENT ACTIONS ────────────────────────────────────────────────────
   const openStudentModal = (s?: Student) => {
-    if (s) { setEditingStudent(s); setNewStuData({ name: s.name, email: s.email, turma: s.turma || '' }); }
-    else { setEditingStudent(null); setNewStuData({ name: '', email: '', turma: '' }); }
+    if (s) { setEditingStudent(s); setNewStuData({ name: s.name, email: s.email, ra: s.ra || '', turma: s.turma || '' }); }
+    else { setEditingStudent(null); setNewStuData({ name: '', email: '', ra: '', turma: '' }); }
     setShowStudentModal(true);
+  };
+
+  const extractRAFromName = async () => {
+    if (!confirm('Deseja analisar os nomes dos alunos para extrair o RA (ex: Nome - 12345)? Isso atualizará os cadastros.')) return;
+    setLoading(true);
+    let count = 0;
+    try {
+      for (const s of dbData.students) {
+        if (s.name.includes(' - ')) {
+          const [name, ra] = s.name.split(' - ').map(p => p.trim());
+          if (ra && /^\d+$/.test(ra)) {
+            await apiPost('student-update', { ...s, name, ra });
+            count++;
+          }
+        }
+      }
+      alert(`${count} alunos foram atualizados com sucesso!`);
+      await fetchDB();
+    } catch (e: any) { alert('Erro: ' + e.message); }
+    finally { setLoading(false); }
   };
 
   const handleImplPaste = (e: React.ClipboardEvent) => {
@@ -437,22 +499,42 @@ export default function Dashboard() {
   const updateBatch = (id: string, patch: Partial<BatchEntry>) =>
     setBatchEntries(prev => prev.map(e => e.id === id ? { ...e, ...patch } : e));
 
+  const saveBatchAndExit = async () => {
+    try {
+      await apiPost('batch-state', {
+          entries: batchEntries,
+          step: batchStep,
+          subjectId: batchSubjectId,
+          activityId: batchActivityId
+      });
+      alert('Sessão salva! Você pode continuar de onde parou depois.');
+      setView('dashboard');
+    } catch (e:any) { alert(e.message); }
+  };
+
   const runBatch = async () => {
     const valid = batchEntries.filter(e => e.studentId && e.subjectId);
     if (!valid.length) return alert('Configure aluno e matéria para ao menos um item');
-    setBatchRunning(true); setBatchReport(null);
+    setBatchRunning(true);
+    setBatchStep('results');
     setBatchEntries(prev => prev.map(e =>
       e.studentId && e.subjectId ? { ...e, status: 'processing' } : e
     ));
     try {
+      // Clear batch state on DB once started processing to fresh restart if needed
+      await apiPost('batch-state', null); 
+
       const fd = new FormData();
       let i = 0;
+      const activity = dbData.activities.find(a => a.id === batchActivityId);
+      
       for (const e of valid) {
         const stu = dbData.students.find(s => s.id === e.studentId);
         const sub = dbData.subjects.find(s => s.id === e.subjectId);
         if (!stu || !sub) continue;
         fd.append(`items[${i}][studentName]`, stu.name);
         fd.append(`items[${i}][subject]`, sub.name);
+        if (activity) fd.append(`items[${i}][activity]`, activity.title);
         fd.append(`items[${i}][file]`, e.file);
         i++;
       }
@@ -475,6 +557,52 @@ export default function Dashboard() {
       setBatchEntries(prev => prev.map(e => e.status === 'processing' ? { ...e, status: 'error', error: 'Falha na requisição' } : e));
     } finally { setBatchRunning(false); }
   };
+  const exportToCanvasCSV = () => {
+    if (!copySubjectId || !copyActivityId) return alert('Selecione matéria e atividade primeiro.');
+    
+    const subject = dbData.subjects.find(s => s.id === copySubjectId);
+    const activity = dbData.activities.find(a => a.id === copyActivityId);
+    if (!subject || !activity) return;
+
+    // Canvas CSV Header based on user sample
+    const activityHeader = `${activity.title} (${Math.floor(Math.random() * 1000)})`;
+    const headers = ["Student", "ID", "SIS User ID", "SIS Login ID", "Section", activityHeader];
+    
+    const rows = dbData.students
+      .filter(stu => (stu.subjectIds || []).includes(copySubjectId))
+      .sort((a,b) => a.name.localeCompare(b.name))
+      .map(stu => {
+        const submission = dbData.submissions.find(sub => 
+          sub.studentName === stu.name && sub.subject === subject.name && sub.status === 'graded'
+        );
+        
+        const gradeValue = submission ? (submission.grade?.toFixed(2).replace('.', ',')) : "0,00";
+        
+        return [
+          `"${stu.name}"`,
+          stu.id.slice(0, 8),
+          stu.ra || stu.email || "", 
+          stu.email || "",
+          `"${subject.name}"`,
+          gradeValue
+        ];
+      });
+
+    const csvContent = [
+      headers.join(","),
+      ["Points Possible", "", "", "", "", "0,00"].join(","),
+      ...rows.map(row => row.join(","))
+    ].join("\n");
+
+    const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Notas_Canvas_${subject.name.replace(/\s+/g, '_')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   if (!hasMounted) return null;
 
@@ -483,13 +611,6 @@ export default function Dashboard() {
     <button className={`nav-item ${view === v ? 'active' : ''}`} onClick={() => setView(v)}>
       <Icon size={16} strokeWidth={1.8} /> {label}
     </button>
-  );
-
-  // ── DB MODE BAR ────────────────────────────────────────────────────────
-  const ModeBar = () => (
-    <div className={`db-mode-bar ${dbMode === 'local' ? 'db-mode-local' : 'db-mode-remote'}`}>
-      {dbMode === 'local' ? '📂 JSON Local' : '☁️ Supabase Remoto'}
-    </div>
   );
 
   return (
@@ -506,28 +627,82 @@ export default function Dashboard() {
           <NavItem v="enrollment"     icon={Users}       label="Enturmação"/>
           <NavItem v="activities"     icon={Clock}       label="Atividades"/>
           <p className="nav-label">Trabalho</p>
-          <NavItem v="batch"          icon={Layers}      label="Correção em Lote"/>
+          <NavItem v="batch"          icon={Layers}      label="Correção"/>
+          <NavItem v="copy"           icon={CheckCircle} label="Lançamento Canvas"/>
+          <NavItem v="reports"        icon={BarChart2}   label="Relatórios"/>
           <p className="nav-label">Sistema</p>
           <NavItem v="implementacoes" icon={Lightbulb}   label="Implementações"/>
+          <NavItem v="settings"       icon={Database}    label="Configurações"/>
         </nav>
-        <div className="db-toggle">
-          <p className="nav-label" style={{marginBottom:5}}>Base de Dados</p>
-          <div className="toggle-group">
-            <button className={dbMode === 'local'  ? 'active' : ''} onClick={() => setDbMode('local')}>
-              <Database size={11}/> Local
-            </button>
-            <button className={dbMode === 'remote' ? 'active' : ''} onClick={() => setDbMode('remote')}>
-              ☁️ Nuvem
-            </button>
-          </div>
-          <ModeBar/>
-        </div>
         <div style={{marginTop: 'auto', paddingTop: 16, borderTop: '1px solid var(--border)', textAlign: 'center', fontSize: 10, color: 'var(--text2)', fontFamily: 'monospace'}}>
           v0.1.0-alpha.1
         </div>
       </aside>
 
-      {/* ── MAIN ────────────────────────────────────────────────────────── */}
+      {/* ══ SETTINGS ═══════════════════════════════════════════════════ */}
+      {view === 'settings' && <>
+        <header className="header">
+          <div><h1>Configurações</h1><p className="subtitle">Gestão global da plataforma</p></div>
+        </header>
+        <div className="table-wrap fade-in" style={{padding:24,maxWidth:800}}>
+          {/* DB Selection Card */}
+          <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 12, padding: 20, marginBottom: 28 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+              <Database size={20} color="var(--accent)"/>
+              <div style={{ flex: 1 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 600 }}>Fonte de Dados</h3>
+                <p style={{ fontSize: 12, color: 'var(--text2)' }}>Determine onde as informações são lidas e gravadas.</p>
+              </div>
+              <div className="toggle-group" style={{ marginTop: 0, minWidth: 240 }}>
+                <button className={dbMode === 'local' ? 'active' : ''} onClick={() => setDbMode('local')}>
+                  📂 JSON Local
+                </button>
+                <button className={dbMode === 'remote' ? 'active' : ''} onClick={() => setDbMode('remote')}>
+                  ☁️ Supabase Cloud
+                </button>
+              </div>
+            </div>
+            <div style={{ fontSize: 11, padding: '8px 12px', background: 'var(--bg)', borderRadius: 6, color: 'var(--text2)' }}>
+              {dbMode === 'remote' 
+                ? '✓ Modo Nuvem ativo: Sincronização em tempo real habilitada.' 
+                : '⚠ Modo Local ativo: Dados salvos apenas neste servidor/máquina.'}
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+            <div>
+              <label className="field-label">Instituição</label>
+              <input className="input" placeholder="Ex: Universidade Aura" value={tempConfigs.institution || ''} onChange={e => setTempConfigs({...tempConfigs, institution: e.target.value})}/>
+            </div>
+            <div>
+              <label className="field-label">Nome do Professor</label>
+              <input className="input" placeholder="Seu Nome completo" value={tempConfigs.professor || ''} onChange={e => setTempConfigs({...tempConfigs, professor: e.target.value})}/>
+            </div>
+          </div>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 20, marginBottom: 24 }}>
+            <div>
+              <label className="field-label">Nome do Sistema</label>
+              <input className="input" value={tempConfigs.system_name} onChange={e => setTempConfigs({...tempConfigs, system_name: e.target.value})}/>
+            </div>
+            <div>
+              <label className="field-label">Cor de Identidade</label>
+              <div style={{display:'flex',gap:12,alignItems:'center'}}>
+                <input type="color" className="input" style={{width:60,height:40,padding:4}} value={tempConfigs.primary_color} onChange={e => setTempConfigs({...tempConfigs, primary_color: e.target.value})}/>
+                <code style={{fontSize:11,color:'var(--text2)',fontFamily:'monospace'}}>{tempConfigs.primary_color.toUpperCase()}</code>
+              </div>
+            </div>
+          </div>
+          
+          <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: 20 }}>
+            <button className="btn-primary" style={{ padding: '10px 32px' }} onClick={() => saveSettings(tempConfigs)}>
+              <Check size={16}/> Salvar Todas as Preferências
+            </button>
+          </div>
+        </div>
+      </>}
+
+      {/* ══ MAIN ══════════════════════════════════════════════════════ */}
       <main className="main">
         {loading && (
           <div style={{display:'flex',alignItems:'center',gap:8,color:'var(--text2)',marginBottom:20,fontSize:13}}>
@@ -561,56 +736,99 @@ export default function Dashboard() {
               <p style={{fontSize:24,fontWeight:600}}>{dbData.activities.length}</p>
             </div>
             <div className="stat-card" style={{background:'var(--surface)',padding:16,borderRadius:12,border:'1px solid var(--border)'}}>
-              <h3 style={{fontSize:12,color:'var(--text2)',marginBottom:8}}>Trabalhos Corrigidos</h3>
+              <h3 style={{fontSize:12,color:'var(--text2)',marginBottom:8}}>Correções Realizadas</h3>
               <p style={{fontSize:24,fontWeight:600}}>{dbData.submissions.filter(s => s.status === 'graded').length}</p>
             </div>
           </div>
 
-          <h2 style={{fontSize:16,marginBottom:12}}>3 Últimas Atividades Recentes</h2>
-          <div className="table-wrap fade-in" style={{marginBottom:32}}>
-            <table className="table">
-              <thead><tr><th>Título</th><th>Matéria</th><th>Peso</th></tr></thead>
-              <tbody>
-                {dbData.activities.slice(-3).reverse().map(a => {
-                  const sub = dbData.subjects.find(s => s.id === a.subjectId);
-                  return (
-                    <tr key={a.id}>
-                      <td className="td-name">{a.title}</td>
-                      <td><span className="badge-subject">{sub?.name ?? a.subjectId}</span></td>
-                      <td className="td-muted">{a.weight}×</td>
-                    </tr>
-                  );
-                })}
-                {dbData.activities.length === 0 && (
-                  <tr><td colSpan={3}><div className="empty-state"><span style={{fontSize:13,color:'var(--text2)'}}>Nenhuma atividade cadastrada.</span></div></td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          <h2 style={{fontSize:16, marginBottom:20, display:'flex', alignItems:'center', gap:8}}>
+            <Layers size={18} color="var(--accent)"/> Histórico de Correções Agrupadas
+          </h2>
+          
+          <div className="fade-in" style={{display:'flex', flexDirection:'column', gap:28}}>
+            {dbData.subjects.filter(sub => dbData.submissions.some(s => s.subject === sub.name)).sort((a,b) => a.name.localeCompare(b.name)).map(subject => {
+              const subjectSubs = dbData.submissions.filter(s => s.subject === subject.name);
+              
+              // Group submissions of this subject by activity
+              const activityGroups = subjectSubs.reduce((acc, sub) => {
+                const actName = sub.feedback?.split('\n')[0]?.includes('Atividade:') 
+                  ? sub.feedback.split('\n')[0].replace('Atividade:', '').trim() 
+                  : 'Geral';
+                if (!acc[actName]) acc[actName] = [];
+                acc[actName].push(sub);
+                return acc;
+              }, {} as Record<string, Submission[]>);
 
-          <h2 style={{fontSize:16,marginBottom:12}}>Submissões (Corrigidas ou Em Fila)</h2>
-          <div className="table-wrap fade-in">
-            <table className="table">
-              <thead><tr><th>Aluno</th><th>Matéria</th><th>Status</th><th>Nota</th><th>Data</th><th></th></tr></thead>
-              <tbody>
-                {dbData.submissions.length === 0
-                  ? <tr><td colSpan={6}><div className="empty-state"><BookOpen size={40}/><p>Nenhuma submissão nesta base.</p></div></td></tr>
-                  : dbData.submissions.map(sub => {
-                    const cfg = STATUS_CONFIG[sub.status] ?? STATUS_CONFIG.pending;
-                    return (
-                      <tr key={sub.id} className={selected?.id === sub.id ? 'selected' : ''} onClick={() => setSelected(sub)}>
-                        <td className="td-name">{sub.studentName}</td>
-                        <td><span className="badge-subject">{sub.subject}</span></td>
-                        <td><span className="status-pill" style={{background:cfg.color+'18',color:cfg.color}}><cfg.icon size={13}/>{cfg.label}</span></td>
-                        <td className="td-grade">{sub.grade?.toFixed(1) ?? '–'}</td>
-                        <td className="td-muted">{sub.submittedAt}</td>
-                        <td><div className="actions"><button className="btn-icon-danger" onClick={e=>{e.stopPropagation();del('submission',sub.id)}}><Trash2 size={14}/></button></div></td>
-                      </tr>
-                    );
-                  })
-                }
-              </tbody>
-            </table>
+              return (
+                <div key={subject.id} className="card" style={{padding:0, overflow:'hidden', border:'1px solid var(--border)'}}>
+                  <div style={{background:'var(--surface2)', padding:'12px 20px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                    <h3 style={{fontSize:14, fontWeight:700, color:'var(--accent)', display:'flex', alignItems:'center', gap:8}}>
+                      <BookOpen size={16}/> {subject.name}
+                    </h3>
+                    <span className="badge" style={{fontSize:10}}>{subjectSubs.length} correções</span>
+                  </div>
+                  
+                  <div style={{padding:'10px 20px 20px'}}>
+                    {Object.entries(activityGroups).map(([actTitle, subs]) => (
+                      <div key={actTitle} style={{marginTop:16}}>
+                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10}}>
+                          <h4 style={{fontSize:12, fontWeight:600, color:'var(--text1)', display:'flex', alignItems:'center', gap:6, opacity:0.8}}>
+                            <Sparkles size={14} color="#10b981"/> {actTitle}
+                          </h4>
+                          <button 
+                            className="btn-icon-danger" 
+                            style={{padding:4, height:'auto', width:'auto'}} 
+                            title={`Apagar todas as ${subs.length} correções de ${actTitle}`}
+                            onClick={() => deleteActivityCorrections(subject.name, actTitle)}
+                          >
+                            <Trash2 size={12}/> <span style={{fontSize:10}}>Limpar Atividade</span>
+                          </button>
+                        </div>
+                        <div className="table-wrap" style={{border:'none', borderRadius:8, background:'var(--bg)'}}>
+                          <table className="table table-sm">
+                            <thead>
+                              <tr><th>Aluno</th><th>Nota</th><th>Data</th><th style={{textAlign:'right'}}>Ações</th></tr>
+                            </thead>
+                            <tbody>
+                              {subs.sort((a,b) => b.submittedAt.localeCompare(a.submittedAt)).map(sub => {
+                                const cfg = STATUS_CONFIG[sub.status] ?? STATUS_CONFIG.pending;
+                                return (
+                                  <tr key={sub.id} className={selected?.id === sub.id ? 'selected' : ''} onClick={() => setSelected(sub)} style={{cursor:'pointer'}}>
+                                    <td className="td-name" style={{fontSize:13}}>
+                                      {sub.studentName}
+                                    </td>
+                                    <td>
+                                      <span className="status-pill" style={{background:cfg.color+'18',color:cfg.color, fontSize:11, padding:'2px 8px'}}>
+                                        <cfg.icon size={11}/> {sub.grade?.toFixed(1) ?? '–'}
+                                      </span>
+                                    </td>
+                                    <td className="td-muted" style={{fontSize:11}}>{sub.submittedAt.split(' ')[0]}</td>
+                                    <td>
+                                      <div className="actions" onClick={e => e.stopPropagation()} style={{justifyContent:'flex-end'}}>
+                                        <button className="btn-icon" onClick={() => setSelected(sub)} title="Ver Detalhes"><ChevronRight size={14}/></button>
+                                        <button className="btn-icon-danger" onClick={() => del('submission', sub.id)} title="Excluir"><Trash2 size={14}/></button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            
+            {dbData.submissions.length === 0 && (
+              <div className="empty-state" style={{background:'var(--surface)', borderRadius:12, padding:40, border:'1px dashed var(--border)'}}>
+                <Layers size={40} style={{opacity:0.2, marginBottom:16}}/>
+                <p>Nenhuma correção registrada no sistema.</p>
+                <button className="btn-primary" style={{marginTop:16}} onClick={() => setView('batch')}>Iniciar Nova Correção</button>
+              </div>
+            )}
           </div>
         </>}
 
@@ -659,6 +877,9 @@ export default function Dashboard() {
           <header className="header">
             <div><h1>Alunos</h1><p className="subtitle">{dbData.students.length} estudantes</p></div>
             <div className="header-actions">
+              <button className="btn-ghost" onClick={extractRAFromName} title="Extrai o número após o '-' do nome e coloca no campo RA">
+                <Hash size={16}/> Extrair RA do Nome
+              </button>
               <label className="btn-ghost" style={{cursor:'pointer', position:'relative', overflow:'hidden'}}>
                 <Upload size={16}/> Importar (TXT/CSV)
                 <input type="file" accept=".txt,.csv" style={{position:'absolute',opacity:0,width:1,height:1,left:0,top:0}} onChange={handleStudentsImport}/>
@@ -668,7 +889,7 @@ export default function Dashboard() {
           </header>
           <div className="table-wrap fade-in">
             <table className="table">
-              <thead><tr><th>Nome</th><th>Email</th><th>Turma</th><th>Matéria</th><th></th></tr></thead>
+              <thead><tr><th>Nome</th><th>RA</th><th>Email</th><th>Turma</th><th>Matéria</th><th></th></tr></thead>
               <tbody>
                 {dbData.students.length === 0
                   ? <tr><td colSpan={5}><div className="empty-state"><UserPlus size={40}/><p>Nenhum aluno.</p></div></td></tr>
@@ -678,6 +899,7 @@ export default function Dashboard() {
                     return (
                       <tr key={s.id}>
                         <td className="td-name">{s.name}</td>
+                        <td style={{fontSize:12, fontWeight:600}}>{s.ra || <span style={{opacity:0.3}}>—</span>}</td>
                         <td className="td-muted">{s.email}</td>
                         <td>{!s.turma ? <span style={{fontSize:11,color:'var(--text2)'}}>Sem turma</span> : <span className="badge badge-blue">{s.turma}</span>}</td>
                         <td>{sub ? <span className="badge-subject">{sub.name}</span> : <span style={{fontSize:11,color:'var(--text2)'}}>Livre</span>}</td>
@@ -810,138 +1032,536 @@ export default function Dashboard() {
 
 
         {/* ══ CORREÇÃO EM LOTE ══════════════════════════════════════════= */}
-        {view === 'batch' && <>
-          <header className="header">
-            <div><h1>Correção em Lote</h1><p className="subtitle">Envie os PDFs — o sistema identifica o aluno pelo nome do arquivo</p></div>
-            <div className="header-actions">
-              <button className="btn-ghost" onClick={() => { setBatchEntries([]); setBatchReport(null); }}><X size={15}/> Limpar</button>
-              <button className="btn-primary" onClick={runBatch} disabled={batchRunning || batchEntries.length === 0}>
-                {batchRunning ? <><Sparkles size={16} className="spin"/> Processando…</> : <><BarChart2 size={16}/> Corrigir Lote</>}
-              </button>
-            </div>
-          </header>
-
-          {/* Config bar */}
-          <div style={{display:'flex',gap:10,marginBottom:18,alignItems:'center',flexWrap:'wrap'}}>
-            <div style={{display:'flex',alignItems:'center',gap:8,fontSize:13,color:'var(--text2)'}}>
-              <FileText size={14}/> Matéria padrão:
-            </div>
-            <select className="input" style={{width:'auto',minWidth:200}} value={batchSubjectId} onChange={e => {
-              setBatchSubjectId(e.target.value);
-              setBatchEntries(prev => prev.map(en => ({ ...en, subjectId: e.target.value })));
-            }}>
-              <option value="">Selecione...</option>
-              {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-            <label className="drop-zone drop-zone-sm" style={{cursor:'pointer',flex:1,minWidth:200}}>
-              <Upload size={16}/> Arraste PDFs ou clique para selecionar
-              <input type="file" accept=".pdf" multiple style={{display:'none'}}
-                onChange={e => e.target.files && addBatchFiles(e.target.files)}/>
-            </label>
-          </div>
-
-          {/* Report bar */}
-          {batchReport && (
-            <div style={{display:'flex',gap:10,marginBottom:16,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:10,padding:'12px 16px'}}>
-              <span className="badge badge-green"><CheckCircle size={12}/> {batchReport.succeeded} corrigidos</span>
-              {batchReport.failed > 0 && <span className="badge badge-red"><AlertCircle size={12}/> {batchReport.failed} erros</span>}
-            </div>
-          )}
-
-          {batchEntries.length === 0
-            ? <div className="empty-state" style={{border:'2px dashed var(--border)',borderRadius:12,height:280}}>
-                <Layers size={48}/><p>Selecione os PDFs acima para começar.</p>
-                <p style={{fontSize:11.5}}>O sistema tentará associar cada arquivo a um aluno pelo nome do arquivo.</p>
+        {view === 'batch' && (
+          <div className="fade-in">
+            <header className="header" style={{ marginBottom: 24 }}>
+              <div>
+                <h1>Correção</h1>
+                <p className="subtitle">
+                  {batchStep === 'upload' && "Fase 1: Upload e Identificação"}
+                  {batchStep === 'validate' && "Fase 2: Validação de Contexto"}
+                  {batchStep === 'results' && "Fase 3: Resultados e Feedbacks"}
+                </p>
               </div>
-            : <div style={{display:'flex',flexDirection:'column',gap:8}} className="fade-in">
-                {/* Table header */}
-                <div style={{display:'grid',gridTemplateColumns:'28px minmax(0,2fr) minmax(0,1.5fr) minmax(0,1.5fr) 80px 32px',gap:8,padding:'6px 12px',fontSize:10.5,color:'var(--text2)',textTransform:'uppercase',letterSpacing:'.07em',fontWeight:600}}>
-                  <span>#</span><span>Arquivo</span><span>Aluno</span><span>Matéria</span><span>Status</span><span></span>
-                </div>
-                {batchEntries.map((entry, idx) => {
-                  const borderColor = entry.status === 'done' ? 'var(--green)' : entry.status === 'error' ? 'var(--red)' : entry.matchScore >= 0.5 ? '#6366f140' : 'var(--border)';
-                  return (
-                    <div key={entry.id} className="batch-item" style={{
-                      gridTemplateColumns:'28px minmax(0,2fr) minmax(0,1.5fr) minmax(0,1.5fr) 80px 32px',
-                      borderColor, opacity: entry.status === 'processing' ? .7 : 1,
+              <div className="header-actions">
+                <button className="btn-ghost" onClick={saveBatchAndExit} title="Salva o progresso e volta para a dashboard">
+                  <RefreshCw size={15}/> Salvar e Sair
+                </button>
+                {batchStep === 'upload' && (
+                  <>
+                    <button className="btn-ghost" onClick={() => { setBatchEntries([]); setBatchReport(null); apiPost('batch-state', null); }}><X size={15}/> Limpar</button>
+                    <button className="btn-primary" 
+                      disabled={batchEntries.length === 0 || !batchSubjectId}
+                      onClick={() => setBatchStep('validate')}>
+                      Próximo Passo <ChevronRight size={16}/>
+                    </button>
+                  </>
+                )}
+              </div>
+            </header>
+
+            {/* STEP 1: UPLOAD & MATCHING */}
+            {batchStep === 'upload' && (
+              <div className="fade-in">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
+                  <div className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 0 }}>
+                      <BookOpen size={16} color="var(--accent)"/> 1. Selecione a Matéria
+                    </label>
+                    <select className="input" style={{ width: '100%' }} value={batchSubjectId} onChange={e => {
+                      setBatchSubjectId(e.target.value);
+                      setBatchEntries(prev => prev.map(en => ({ ...en, subjectId: e.target.value })));
                     }}>
-                      <span style={{fontSize:11,color:'var(--text2)',fontWeight:600}}>#{idx+1}</span>
+                      <option value="">Selecione a disciplina...</option>
+                      {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
+                    </select>
+                  </div>
+                  <div className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 0 }}>
+                      <Upload size={16} color="var(--accent)"/> 2. Envie os PDFs
+                    </label>
+                    <label className="drop-zone drop-zone-sm" style={{ 
+                      cursor: 'pointer', 
+                      height: 48, 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      fontSize: 13,
+                      borderStyle: 'dashed'
+                    }}>
+                      Clique para selecionar os arquivos
+                      <input type="file" accept=".pdf" multiple style={{ display: 'none' }}
+                        onChange={e => e.target.files && addBatchFiles(e.target.files)}/>
+                    </label>
+                  </div>
+                </div>
 
-                      {/* Filename + match badge */}
-                      <div style={{overflow:'hidden'}}>
-                        <p style={{fontSize:12,fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{entry.filename}</p>
-                        {entry.matchScore > 0 && entry.status === 'idle' && (
-                          <span className="batch-match-tag">{Math.round(entry.matchScore*100)}% {entry.matchName}</span>
-                        )}
-                      </div>
-
-                      {/* Aluno selector */}
-                      <div style={{display:'flex', gap: 4, alignItems: 'center'}}>
-                        <select className="input" style={{fontSize:12,padding:'6px 10px',flex:1}}
-                          value={entry.studentId} disabled={entry.status !== 'idle'}
+                {batchEntries.length > 0 && (
+                  <div className="table-wrap">
+                    <div style={{ display: 'grid', gridTemplateColumns: '28px minmax(0,2fr) minmax(0,1.5fr) 40px', gap: 12, padding: '12px 16px', fontSize: 11, fontWeight: 600, color: 'var(--text2)', textTransform: 'uppercase' }}>
+                      <span>#</span><span>Arquivo</span><span>Aluno Identificado</span><span></span>
+                    </div>
+                    {batchEntries.map((entry, idx) => (
+                      <div key={entry.id} className="batch-item" style={{ gridTemplateColumns: '28px minmax(0,2fr) minmax(0,1.5fr) 40px', padding: '10px 16px', marginBottom: 6 }}>
+                        <span style={{ fontSize: 12, color: 'var(--text2)' }}>{idx+1}</span>
+                        <span style={{ fontSize: 13, fontWeight: 500 }}>{entry.filename}</span>
+                        <select className="input" style={{ fontSize: 12, padding: '5px 10px' }}
+                          value={entry.studentId}
                           onChange={e => updateBatch(entry.id, { studentId: e.target.value })}>
                           <option value="">Selecionar aluno…</option>
-                          {dbData.students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                          {dbData.students
+                            .filter(s => !batchSubjectId || (s.subjectIds || []).includes(batchSubjectId))
+                            .sort((a,b) => a.name.localeCompare(b.name))
+                            .map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                         </select>
-                        {!entry.studentId && entry.matchName && entry.status === 'idle' && (
-                          <button className="btn-ghost" style={{padding:'4px'}} title={`Cadastrar "${entry.matchName}"`} onClick={async () => {
-                            try {
-                              const s = await apiPost('student', { name: entry.matchName, email: '', turma: '' });
-                              await fetchDB();
-                              updateBatch(entry.id, { studentId: s.id });
-                            } catch (e:any) { alert(e.message); }
-                          }}><Plus size={14} style={{color:'var(--accent)'}}/></button>
-                        )}
+                        <button className="btn-icon-danger" onClick={() => setBatchEntries(prev => prev.filter(en => en.id !== entry.id))}><X size={14}/></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ marginTop: 24, padding: '20px 0', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+                  <button className="btn-ghost" onClick={() => { setBatchEntries([]); setBatchReport(null); apiPost('batch-state', null); }}><X size={15}/> Limpar Tudo</button>
+                  <button className="btn-primary" 
+                    disabled={batchEntries.length === 0 || !batchSubjectId}
+                    onClick={() => setBatchStep('validate')}>
+                    Próximo Passo <ChevronRight size={16}/>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 2: VALIDATION */}
+            {batchStep === 'validate' && (() => {
+              const sub = dbData.subjects.find(s => s.id === batchSubjectId);
+              const syllabus = syllabusChunks(sub?.syllabus ?? '');
+              return (
+                <div className="fade-in">
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 350px) 1fr', gap: 24, alignItems: 'stretch' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                      <div className="card" style={{ padding: 20, borderLeft: '4px solid var(--accent)', flex: 1 }}>
+                        <h3 style={{ fontSize: 13, color:'var(--text1)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <BookOpen size={16} color="var(--accent)"/> Orientações da Matéria
+                        </h3>
+                        <p style={{ fontSize: 13, fontWeight: 600 }}>{sub?.name}</p>
+                        <p style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 10 }}>{sub?.code}</p>
+                        <div style={{ fontSize: 12, color: 'var(--text2)', background: 'var(--surface2)', padding: 10, borderRadius: 8, maxHeight: 150, overflow: 'auto', border: '1px solid var(--border)' }}>
+                          {syllabus.length > 0 ? syllabus[0].slice(0, 800) + '...' : 'Sem ementa cadastrada.'}
+                        </div>
                       </div>
 
-                      {/* Matéria selector */}
-                      <select className="input" style={{fontSize:12,padding:'6px 10px'}}
-                        value={entry.subjectId} disabled={entry.status !== 'idle'}
-                        onChange={e => updateBatch(entry.id, { subjectId: e.target.value })}>
-                        <option value="">Matéria…</option>
-                        {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                      </select>
-
-                      {/* Status */}
-                      <div style={{display:'flex',alignItems:'center',gap:4}}>
-                        {entry.status === 'idle'       && <span style={{fontSize:11,color:'var(--text2)'}}>Aguarda</span>}
-                        {entry.status === 'processing' && <Sparkles size={15} style={{color:'var(--accent)'}} className="spin"/>}
-                        {entry.status === 'done'       && <><CheckCircle size={15} style={{color:'var(--green)'}}/><span style={{fontSize:11,color:'var(--green)',fontFamily:'monospace'}}>{entry.result?.grade?.toFixed(1)}</span></>}
-                        {entry.status === 'error'      && <span title={entry.error}><AlertCircle size={15} style={{color:'var(--red)'}}/></span>}
+                      <div className="card" style={{ padding: 20, borderLeft: '4px solid #10b981', flex: 1 }}>
+                        <h3 style={{ fontSize: 13, color:'var(--text1)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <Sparkles size={16} color="#10b981"/> Orientações da Atividade
+                        </h3>
+                        <label className="field-label">Vincular a uma Atividade Existente</label>
+                        <select className="input" value={batchActivityId} onChange={e => setBatchActivityId(e.target.value)}>
+                          <option value="">-- Avaliação Geral (Sem Critério Específico) --</option>
+                          {dbData.activities.filter(a => a.subjectId === batchSubjectId).map(a => (
+                            <option key={a.id} value={a.id}>{a.title}</option>
+                          ))}
+                        </select>
+                        {batchActivityId && (() => {
+                          const act = dbData.activities.find(a => a.id === batchActivityId);
+                          return (
+                            <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text2)', background: 'var(--surface2)', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}>
+                              <b>Critérios:</b><br/>{act?.description || 'Nenhum critério detalhado.'}
+                            </div>
+                          );
+                        })()}
                       </div>
-
-                      {/* Remove */}
-                      {entry.status === 'idle' && (
-                        <button className="btn-icon-danger" onClick={() => setBatchEntries(prev => prev.filter(e => e.id !== entry.id))}><X size={14}/></button>
-                      )}
                     </div>
-                  );
-                })}
 
-                {/* Results table */}
-                {batchEntries.some(e => e.status === 'done') && (
-                  <div style={{marginTop:16}}>
-                    <p style={{fontSize:11.5,color:'var(--text2)',marginBottom:8}}>Resultados:</p>
+                    <div className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column' }}>
+                      <h3 style={{ fontSize: 13, color:'var(--text1)', marginBottom: 16 }}>Resumo do Lote</h3>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, overflow: 'auto', maxHeight: 350 }}>
+                        {batchEntries.map((e, i) => {
+                          const stu = dbData.students.find(s => s.id === e.studentId);
+                          return (
+                            <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--surface2)', borderRadius: 6, fontSize: 12, border: '1px solid var(--border)' }}>
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 10 }}>{i+1}. {e.filename}</span>
+                              <span style={{ fontWeight: 600, color: 'var(--accent)', flexShrink: 0 }}>{stu?.name || 'Não associado'}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div style={{ marginTop: 20, padding: 16, background: 'var(--accent)10', borderRadius: 8, border: '1px solid var(--accent)30' }}>
+                        <p style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 600, marginBottom: 4 }}>Pronto para processar?</p>
+                        <p style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.4 }}>O sistema usará o novo modelo <b>Gemini 2.0 Flash-Lite</b> para uma análise ultra-rápida e precisa.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: 24, padding: '20px 0', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+                    <button className="btn-ghost" onClick={() => setBatchStep('upload')}>Voltar</button>
+                    <button className="btn-primary" onClick={runBatch}>
+                      <Sparkles size={16}/> Enviar para Correção
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* STEP 3: RESULTS */}
+            {batchStep === 'results' && (
+              <div className="fade-in">
+                {batchRunning ? (
+                  <div className="empty-state" style={{ height: 400 }}>
+                    <div className="spin" style={{ marginBottom: 20 }}><RefreshCw size={48} color="var(--accent)"/></div>
+                    <h2>Corrigindo Trabalhos...</h2>
+                    <p>Aguarde enquanto a IA analisa cada documento baseado na ementa e critérios.</p>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
+                      <div className="stat-card" style={{ flex: 1, borderTop: '4px solid var(--green)' }}>
+                        <h3>Sucesso</h3>
+                        <p>{batchReport?.succeeded || 0} corrigidos</p>
+                      </div>
+                      <div className="stat-card" style={{ flex: 1, borderTop: '4px solid var(--red)' }}>
+                        <h3>Erros</h3>
+                        <p>{batchReport?.failed || 0} falhas</p>
+                      </div>
+                    </div>
+
                     <div className="table-wrap">
                       <table className="table">
-                        <thead><tr><th>Aluno</th><th>Matéria</th><th>Nota</th><th>Feedback</th></tr></thead>
+                        <thead>
+                          <tr>
+                            <th>Aluno</th>
+                            <th>Status/Nota</th>
+                            <th>Feedback / Erro</th>
+                            <th>Ações</th>
+                          </tr>
+                        </thead>
                         <tbody>
-                          {batchEntries.filter(e => e.status === 'done' && e.result).map(e => (
+                          {batchEntries.map(e => (
                             <tr key={e.id}>
-                              <td className="td-name">{e.result!.studentName}</td>
-                              <td><span className="badge-subject">{e.result!.subject}</span></td>
-                              <td className="td-grade">{e.result!.grade?.toFixed(1) ?? '–'}</td>
-                              <td className="td-desc">{e.result!.feedback}</td>
+                              <td className="td-name">
+                                {dbData.students.find(s => s.id === e.studentId)?.name || 'Aluno'}
+                                <br/><span style={{ fontSize: 10, color: 'var(--text2)' }}>{e.filename}</span>
+                              </td>
+                              <td>
+                                {e.status === 'done' ? (
+                                  <span className="badge badge-green" style={{ fontSize: 14 }}>{e.result?.grade?.toFixed(1)}</span>
+                                ) : (
+                                  <span className="badge badge-red">ERRO</span>
+                                )}
+                              </td>
+                              <td style={{ maxWidth: 400 }}>
+                                <p style={{ fontSize: 12, lineHeight: 1.4 }} className={e.status === 'error' ? 'text-red' : ''}>
+                                  {e.status === 'done' ? e.result?.feedback?.slice(0, 150) + '...' : e.error}
+                                </p>
+                              </td>
+                              <td style={{ textAlign: 'right' }}>
+                                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                                  {e.status === 'done' && (
+                                    <>
+                                      <button className="btn-icon" onClick={() => setSelected(e.result!)} title="Ver Detalhes">
+                                        <ChevronRight size={14}/>
+                                      </button>
+                                      <button className="btn-icon-danger" onClick={() => del('submission', e.result!.id)} title="Excluir Correção">
+                                        <Trash2 size={14}/>
+                                      </button>
+                                    </>
+                                  )}
+                                  {e.status === 'error' && (
+                                    <button className="btn-icon-danger" onClick={() => setBatchEntries(prev => prev.filter(x => x.id !== e.id))}>
+                                      <Trash2 size={14}/>
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
+
+                    <div style={{ marginTop: 24, padding: '20px 0', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+                      <button className="btn-primary" onClick={async () => { 
+                        setBatchStep('upload'); 
+                        setBatchEntries([]); 
+                        setBatchReport(null); 
+                        await apiPost('batch-state', null);
+                        await fetchDB();
+                      }}>
+                        Nova Correção
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
-          }
-        </>}
+            )}
+          </div>
+        )}
+
+        {/* ══ LANÇAMENTO (COPIA E COLA) ══════════════════════════════════════════ */}
+        {view === 'copy' && (
+          <div className="fade-in">
+            <header className="header" style={{ marginBottom: 24 }}>
+              <div>
+                <h1>Lançamento Canvas</h1>
+                <p className="subtitle">Interface de apoio para o sistema da faculdade</p>
+              </div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button className="btn-primary" onClick={exportToCanvasCSV} disabled={!copySubjectId || !copyActivityId}>
+                  <Upload size={16}/> Exportar CSV para Canvas
+                </button>
+                <button className="btn-icon" onClick={fetchDB} title="Recarregar Dados">
+                  <RefreshCw size={18} className={loading ? 'spin' : ''}/>
+                </button>
+              </div>
+            </header>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
+              <div className="card" style={{ padding: 24 }}>
+                <label className="field-label">1. Selecione a Matéria</label>
+                <select className="input" style={{ width: '100%' }} value={copySubjectId} onChange={e => {
+                  setCopySubjectId(e.target.value);
+                  setCopyActivityId('');
+                }}>
+                  <option value="">Selecione...</option>
+                  {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <div className="card" style={{ padding: 24 }}>
+                <label className="field-label">2. Selecione a Atividade</label>
+                <select className="input" style={{ width: '100%' }} value={copyActivityId} onChange={e => setCopyActivityId(e.target.value)} disabled={!copySubjectId}>
+                  <option value="">Selecione...</option>
+                  {dbData.activities.filter(a => a.subjectId === copySubjectId).map(a => (
+                    <option key={a.id} value={a.id}>{a.title}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {copySubjectId && copyActivityId && (
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '250px' }}>Nome do Aluno</th>
+                      <th style={{ width: '100px' }}>Nota</th>
+                      <th>Conceito / Feedback</th>
+                      <th style={{ width: '120px' }}>Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dbData.students
+                      .filter(s => (s.subjectIds || []).includes(copySubjectId))
+                      .sort((a,b) => a.name.localeCompare(b.name))
+                      .map(stu => {
+                        const subName = dbData.subjects.find(s => s.id === copySubjectId)?.name;
+                        const matchingSubmission = dbData.submissions.find(sub => 
+                          sub.studentName === stu.name && sub.subject === subName && sub.status === 'graded'
+                        );
+
+                        const gradeValue = matchingSubmission ? matchingSubmission.grade?.toFixed(1) : "0.0";
+                        const feedbackText = matchingSubmission 
+                          ? matchingSubmission.feedback 
+                          : "nota 0 e duas faltas";
+
+                        return (
+                          <tr key={stu.id} style={{ 
+                            background: matchingSubmission ? 'transparent' : '#ef444408',
+                            borderLeft: matchingSubmission ? 'none' : '3px solid var(--red)'
+                          }}>
+                            <td className="td-name">
+                              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span>{stu.name}</span>
+                                {!matchingSubmission && <span style={{ fontSize: 10, color: 'var(--red)', fontWeight: 500 }}>AUSENTE</span>}
+                              </div>
+                            </td>
+                            <td>
+                              <span style={{ 
+                                fontWeight: 700, 
+                                fontSize: 14,
+                                color: matchingSubmission ? 'var(--green)' : 'var(--red)',
+                                background: matchingSubmission ? 'var(--green)15' : 'var(--red)15',
+                                padding: '4px 8px',
+                                borderRadius: 6,
+                                minWidth: 45,
+                                textAlign: 'center',
+                                display: 'inline-block'
+                              }}>
+                                {gradeValue}
+                              </span>
+                            </td>
+                            <td style={{ maxWidth: 0, width: '100%' }}>
+                              <div style={{ 
+                                fontSize: 12, 
+                                color: 'var(--text2)', 
+                                background: 'var(--surface2)', 
+                                padding: '8px 12px', 
+                                borderRadius: 8,
+                                border: '1px solid var(--border)',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                display: 'block'
+                              }} title={feedbackText}>
+                                {feedbackText}
+                              </div>
+                            </td>
+                            <td style={{ textAlign: 'right' }}>
+                              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                                <button className="btn-icon" style={{ background: 'var(--surface3)' }} title="Copiar Nota" onClick={() => {
+                                  navigator.clipboard.writeText(gradeValue || "0.0");
+                                }}>
+                                  <BarChart2 size={15}/>
+                                </button>
+                                <button className="btn-icon" style={{ background: 'var(--accent)20', color: 'var(--accent2)' }} title="Copiar Feedback" onClick={() => {
+                                  navigator.clipboard.writeText(feedbackText || "");
+                                }}>
+                                  <Copy size={15}/>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ══ RELATÓRIOS ══════════════════════════════════════════════════════════ */}
+        {view === 'reports' && (
+          <div className="fade-in">
+            <header className="header" style={{ marginBottom: 24 }}>
+              <div>
+                <h1>Relatórios Acadêmicos</h1>
+                <p className="subtitle">Gere pautas de notas e faltas em PDF</p>
+              </div>
+              <button className="btn-icon" onClick={fetchDB} title="Recarregar Dados">
+                <RefreshCw size={18} className={loading ? 'spin' : ''}/>
+              </button>
+            </header>
+
+            <div className="card" style={{ padding: 24, marginBottom: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: 16 }}>
+                <div>
+                  <label className="field-label">Tipo de Relatório</label>
+                  <div className="toggle-group" style={{ marginTop: 0 }}>
+                    <button className={reportType === 'subject' ? 'active' : ''} onClick={() => setReportType('subject')}>Por Matéria</button>
+                    <button className={reportType === 'activity' ? 'active' : ''} onClick={() => setReportType('activity')}>Por Atividade</button>
+                  </div>
+                </div>
+                <div>
+                  <label className="field-label">Matéria</label>
+                  <select className="input" value={reportSubjectId} onChange={e => {
+                    setReportSubjectId(e.target.value);
+                    setReportActivityId('');
+                  }}>
+                    <option value="">Selecione...</option>
+                    {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
+                  </select>
+                </div>
+                {reportType === 'activity' && (
+                  <div>
+                    <label className="field-label">Atividade</label>
+                    <select className="input" value={reportActivityId} onChange={e => setReportActivityId(e.target.value)} disabled={!reportSubjectId}>
+                      <option value="">Selecione...</option>
+                      {dbData.activities.filter(a => a.subjectId === reportSubjectId).map(a => (
+                        <option key={a.id} value={a.id}>{a.title}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {reportSubjectId && (reportType === 'subject' || reportActivityId) && (
+              <div className="card" style={{ padding: 24, textAlign: 'center' }}>
+                <BarChart2 size={48} color="var(--accent)" style={{ marginBottom: 16, opacity: 0.5 }} />
+                <h3>{reportType === 'subject' ? 'Relatório Geral da Matéria' : 'Relatório por Atividade'}</h3>
+                <p style={{ color: 'var(--text2)', marginBottom: 20 }}>
+                  {reportType === 'subject' 
+                    ? 'Lista horizontal com todas as atividades, notas finais e faltas totais.'
+                    : 'Lista detalhada com nota, resumo da correção e faltas desta atividade específica.'}
+                </p>
+                <button className="btn-primary" style={{ padding: '12px 32px' }} onClick={async () => {
+                  const { jsPDF } = await import('jspdf');
+                  const autoTable = (await import('jspdf-autotable')).default;
+                  const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+                  const sub = dbData.subjects.find(s => s.id === reportSubjectId);
+                  
+                  // Header using global settings
+                  doc.setFontSize(18);
+                  doc.text(dbData.configs.institution || 'Relatório de Notas', 14, 20);
+                  doc.setFontSize(11);
+                  doc.setTextColor(100);
+                  doc.text(`Professor: ${dbData.configs.professor || 'Não informado'}`, 14, 28);
+                  doc.text(`Matéria: ${sub?.name} (${sub?.code})`, 14, 34);
+                  if (reportType === 'activity') {
+                    const act = dbData.activities.find(a => a.id === reportActivityId);
+                    doc.text(`Atividade: ${act?.title}`, 14, 40);
+                  }
+                  doc.text(`Data de Emissão: ${new Date().toLocaleDateString()}`, doc.internal.pageSize.width - 60, 20);
+
+                  let head: string[][] = [];
+                  let body: string[][] = [];
+
+                  if (reportType === 'subject') {
+                    const acts = dbData.activities.filter(a => a.subjectId === reportSubjectId);
+                    head = [['Aluno', ...acts.flatMap(a => [`${a.title} (N)`, `${a.title} (F)`]), 'Média Final', 'Total Faltas']];
+                    body = dbData.students
+                      .filter(s => (s.subjectIds || []).includes(reportSubjectId))
+                      .sort((a,b) => a.name.localeCompare(b.name))
+                      .map(stu => {
+                        let totalGrade = 0; let totalAbsences = 0;
+                        const row = [stu.name];
+                        acts.forEach(a => {
+                          const subName = dbData.subjects.find(s => s.id === reportSubjectId)?.name;
+                          const submission = dbData.submissions.find(sub => 
+                            sub.studentName === stu.name && sub.subject === subName && sub.status === 'graded'
+                          );
+                          if (submission) {
+                            row.push(submission.grade?.toFixed(1) || '0.0'); row.push('0');
+                            totalGrade += submission.grade || 0;
+                          } else {
+                            row.push('0.0'); row.push('2');
+                            totalAbsences += 2;
+                          }
+                        });
+                        row.push((totalGrade / (acts.length || 1)).toFixed(1));
+                        row.push(totalAbsences.toString());
+                        return row;
+                      });
+                  } else {
+                    head = [['Aluno', 'Nota', 'Faltas', 'Resumo da Correção']];
+                    body = dbData.students
+                      .filter(s => (s.subjectIds || []).includes(reportSubjectId))
+                      .sort((a,b) => a.name.localeCompare(b.name))
+                      .map(stu => {
+                        const subName = dbData.subjects.find(s => s.id === reportSubjectId)?.name;
+                        const submission = dbData.submissions.find(sub => 
+                          sub.studentName === stu.name && sub.subject === subName && sub.status === 'graded'
+                        );
+                        if (submission) {
+                          return [stu.name, submission.grade?.toFixed(1) || '0.0', '0', submission.feedback || 'Sem feedback'];
+                        }
+                        return [stu.name, '0.0', '2', 'Não entregou / Ausente'];
+                      });
+                  }
+
+                  autoTable(doc, {
+                    head, body, startY: reportType === 'subject' ? 45 : 50,
+                    theme: 'grid', styles: { fontSize: reportType === 'subject' ? 7 : 9, cellPadding: 2 },
+                    headStyles: { fillColor: [99, 102, 241], textColor: 255 },
+                    columnStyles: reportType === 'activity' ? { 3: { cellWidth: 120 } } : undefined
+                  });
+
+                  doc.save(`Relatorio_${sub?.code || 'Aura'}_${reportType}.pdf`);
+                }}>
+                  Gerar PDF ({reportType === 'subject' ? 'Matéria' : 'Atividade'})
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ══ IMPLEMENTAÇÕES ════════════════════════════════════════════= */}
         {view === 'implementacoes' && <>
@@ -1084,10 +1704,18 @@ export default function Dashboard() {
             <div className="modal-header"><h2>{editingStudent ? 'Editar Aluno' : 'Novo Aluno'}</h2><button className="btn-close" onClick={() => setShowStudentModal(false)}>✕</button></div>
             <label className="field-label">Nome completo</label>
             <input className="input" placeholder="Ex: MariaSilva" value={newStuData.name} onChange={e => setNewStuData({...newStuData, name: e.target.value})}/>
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12}}>
+              <div>
+                <label className="field-label">RA</label>
+                <input className="input" placeholder="Ex: 12345" value={newStuData.ra} onChange={e => setNewStuData({...newStuData, ra: e.target.value})}/>
+              </div>
+              <div>
+                <label className="field-label">Turma</label>
+                <input className="input" placeholder="Turma A" value={newStuData.turma} onChange={e => setNewStuData({...newStuData, turma: e.target.value})}/>
+              </div>
+            </div>
             <label className="field-label">Email</label>
             <input className="input" placeholder="Ex: maria@email.com" value={newStuData.email} onChange={e => setNewStuData({...newStuData, email: e.target.value})}/>
-            <label className="field-label">Turma</label>
-            <input className="input" placeholder="Turma A" value={newStuData.turma} onChange={e => setNewStuData({...newStuData, turma: e.target.value})}/>
             <div className="modal-actions">
               <button className="btn-ghost" onClick={() => setShowStudentModal(false)}>Cancelar</button>
               <button className="btn-primary" onClick={saveStudent}>Salvar</button>

@@ -35,6 +35,7 @@ const INITIAL_DB: any = {
   implementacoes:  [],
   submissions:     [],
   configs:         { system_name: 'Avalia.ai', primary_color: '#6366f1' },
+  batch_state:     null,
 };
 
 let initPromise: Promise<void> | null = null;
@@ -362,6 +363,26 @@ export const db = {
     data.configs = configs;
     saveDB(data);
     return configs;
+  },
+  // ── BATCH STATE ────────────────────────────────────────────────────────
+  getBatchState: async (mode: 'local' | 'remote' = 'local') => {
+    if (mode === 'remote') {
+       await initPostgres();
+       const { rows } = await sql`SELECT data FROM configs WHERE id = 'batch' LIMIT 1`;
+       return rows[0] ? JSON.parse(rows[0].data) : null;
+    }
+    return readDB().batch_state || null;
+  },
+  saveBatchState: async (state: any, mode: 'local' | 'remote' = 'local') => {
+    if (mode === 'remote') {
+      const dataStr = JSON.stringify(state);
+      await sql`INSERT INTO configs (id, data) VALUES ('batch', ${dataStr}) ON CONFLICT (id) DO UPDATE SET data = ${dataStr}`;
+      return state;
+    }
+    const data = readDB();
+    data.batch_state = state;
+    saveDB(data);
+    return state;
   },
 
   // ── ERROR LOGS ──────────────────────────────────────────────────────────

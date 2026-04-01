@@ -5,8 +5,14 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   const mode = (req.nextUrl.searchParams.get('mode') as 'local' | 'remote') || 'local';
+  const action = req.nextUrl.searchParams.get('action');
 
   try {
+    if (action === 'batch-state-get') {
+      const result = await db.getBatchState(mode);
+      return NextResponse.json(result);
+    }
+
     const [subjects, students, activities, implementacoes, submissions, configs] = await Promise.all([
       db.getSubjects(mode),
       db.getStudents(mode),
@@ -31,6 +37,9 @@ export async function POST(req: NextRequest) {
     let result;
 
     switch (entity) {
+      case 'batch-state':
+        result = await db.saveBatchState(data, mode);
+        break;
       case 'subject':
         result = await db.addSubject(data.name, data.code, data.syllabus || '', mode);
         break;

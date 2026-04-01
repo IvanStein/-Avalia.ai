@@ -6,14 +6,14 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 interface SkillPrompts {
   [key: string]: {
     prompt: (params: any) => string;
-    model: "gemini-1.5-pro" | "gemini-1.5-flash";
+    model: "gemini-2.5-flash-lite" | "gemini-1.5-flash" | "gemini-1.5-pro";
     responseType: "json" | "text";
   }
 }
 
 const PROMPTS: SkillPrompts = {
   [SKILLS.GRADE_DISSERTATIVE]: {
-    model: "gemini-1.5-pro",
+    model: "gemini-2.5-flash-lite",
     responseType: "json",
     prompt: (p) => `
 Você é um professor universitário experiente corrigindo um trabalho acadêmico.
@@ -49,7 +49,7 @@ Responda SOMENTE em JSON:
     `.trim()
   },
   [SKILLS.GRADE_OBJECTIVE]: {
-    model: "gemini-1.5-flash",
+    model: "gemini-2.5-flash-lite",
     responseType: "json",
     prompt: (p) => `
 Você está corrigindo um questionário de múltipla escolha.
@@ -80,7 +80,7 @@ Responda SOMENTE em JSON:
     `.trim()
   },
   [SKILLS.PERSONALIZED_FEEDBACK]: {
-    model: "gemini-1.5-pro",
+    model: "gemini-2.5-flash-lite",
     responseType: "text",
     prompt: (p) => `
 Você é um tutor educacional empático. Com base no histórico e na última correção,
@@ -104,7 +104,7 @@ Responda em texto corrido em português, sem JSON.
     `.trim()
   },
   [SKILLS.EXTRACT_WORK]: {
-    model: "gemini-1.5-flash",
+    model: "gemini-2.5-flash-lite",
     responseType: "json",
     prompt: (p) => `
 Extraia as informações estruturadas do trabalho acadêmico abaixo.
@@ -126,7 +126,7 @@ Responda SOMENTE em JSON:
     `.trim()
   },
   [SKILLS.CLASS_SUMMARY]: {
-    model: "gemini-1.5-pro",
+    model: "gemini-2.5-flash-lite",
     responseType: "json",
     prompt: (p) => `
 Analise o desempenho geral da turma abaixo e gere um relatório para o professor.
@@ -155,7 +155,7 @@ Responda em JSON:
     `.trim()
   },
   [SKILLS.CRUD_AI]: {
-    model: "gemini-1.5-flash",
+    model: "gemini-2.5-flash-lite",
     responseType: "json",
     prompt: (p) => `
 Você é um assistente administrativo escolar. Converta o comando abaixo em uma operação de banco de dados.
@@ -184,7 +184,7 @@ Responda SOMENTE em JSON:
     `.trim()
   },
   [SKILLS.GRADE_BATCH]: {
-    model: "gemini-1.5-pro",
+    model: "gemini-2.5-flash-lite",
     responseType: "json",
     prompt: (p) => `
 Você é um professor universitário sênior responsável por corrigir um lote de trabalhos acadêmicos simultaneamente.
