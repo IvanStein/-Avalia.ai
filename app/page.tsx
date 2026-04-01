@@ -1623,7 +1623,7 @@ export default function Dashboard() {
               <input className="input" type="color" style={{width:50,height:40,padding:2}} value={tempConfigs.primary_color} onChange={e => setTempConfigs({...tempConfigs, primary_color: e.target.value})}/>
               <input className="input" placeholder="#6366f1" value={tempConfigs.primary_color} onChange={e => setTempConfigs({...tempConfigs, primary_color: e.target.value})}/>
             </div>
-            <button className="btn-primary" style={{marginTop:32,width:'100%'}} onClick={saveSettings}>Salvar Configurações</button>
+            <button className="btn-primary" style={{marginTop:32,width:'100%'}} onClick={() => saveSettings()}>Salvar Configurações</button>
           </div>
         </>}
       </main>
