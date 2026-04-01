@@ -51,13 +51,13 @@ const IMPL_STATUS: Record<string, { label: string; color: string }> = {
   backlog:     { label: 'Backlog',      color: '#8b90a0' },
   validating:  { label: 'Validando',   color: '#f59e0b' },
   approved:    { label: 'Aprovado',    color: '#6366f1' },
-  done:        { label: 'ConcluÃ­do',   color: '#10b981' },
+  done:        { label: 'Concluído',   color: '#10b981' },
 };
 
 const PRIORITY_CONFIG: Record<string, { label: string; cls: string }> = {
-  alta:  { label: 'â–² Alta',  cls: 'priority-alta' },
-  media: { label: 'â—† MÃ©dia', cls: 'priority-media' },
-  baixa: { label: 'â–¼ Baixa', cls: 'priority-baixa' },
+  alta:  { label: '▲ Alta',  cls: 'priority-alta' },
+  media: { label: '◆ Média', cls: 'priority-media' },
+  baixa: { label: '▼ Baixa', cls: 'priority-baixa' },
 };
 
 const EMPTY_DB: DBData = { 
@@ -89,7 +89,7 @@ function matchStudentByFilename(filename: string, students: Student[]): { studen
 
 function cleanFilenameForName(filename: string) {
   let clean = filename.replace(/\.pdf$/i, '').replace(/[-_]/g, ' ');
-  clean = clean.replace(/\b(atividade|trabalho|avalia[cÃ§][aÃ£]o|tarefa|prova|teste|\d+)\b/gi, '');
+  clean = clean.replace(/\b(atividade|trabalho|avalia[cç][aã]o|tarefa|prova|teste|\d+)\b/gi, '');
   clean = clean.replace(/\s+/g, ' ').trim();
   return clean.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
 }
@@ -224,26 +224,26 @@ export default function Dashboard() {
   };
 
   const del = async (entity: string, id: string) => {
-    // ValidaÃ§Ãµes antes da exclusÃ£o
+    // Validações antes da exclusão
     if (entity === 'subject') {
       const hasActs = dbData.activities.some(a => a.subjectId === id);
-      if (hasActs) return alert('NÃ£o Ã© possÃ­vel excluir: existem atividades vinculadas a esta matÃ©ria.');
+      if (hasActs) return alert('Não é possível excluir: existem atividades vinculadas a esta matéria.');
     }
     if (entity === 'student') {
       const studentName = dbData.students.find(s => s.id === id)?.name;
       const hasSubs = dbData.submissions.some(s => s.studentName === studentName);
-      if (hasSubs) return alert('NÃ£o Ã© possÃ­vel excluir: o aluno possui avaliaÃ§Ãµes/submissÃµes cadastradas.');
+      if (hasSubs) return alert('Não é possível excluir: o aluno possui avaliações/submissões cadastradas.');
     }
     
-    if (!confirm('Confirma a exclusÃ£o?')) return;
+    if (!confirm('Confirma a exclusão?')) return;
     try { await apiDelete(entity, id); await fetchDB(); if (selected?.id === id) setSelected(null); }
     catch (e: any) { alert('Erro: ' + e.message); }
   };
 
   const deleteActivityCorrections = async (subjectName: string, activityName?: string) => {
     const msg = activityName 
-      ? `Deseja apagar TODAS as correÃ§Ãµes da atividade "${activityName}" na matÃ©ria "${subjectName}"? Esta aÃ§Ã£o Ã© irreversÃ­vel.`
-      : `Deseja apagar TODAS as correÃ§Ãµes de TODAS as atividades da matÃ©ria "${subjectName}"? Isso removerÃ¡ ${dbData.submissions.filter(s => s.subject === subjectName).length} registros. Esta aÃ§Ã£o Ã© irreversÃ­vel.`;
+      ? `Deseja apagar TODAS as correções da atividade "${activityName}" na matéria "${subjectName}"? Esta ação é irreversível.`
+      : `Deseja apagar TODAS as correções de TODAS as atividades da matéria "${subjectName}"? Isso removerá ${dbData.submissions.filter(s => s.subject === subjectName).length} registros. Esta ação é irreversível.`;
     
     if (!confirm(msg)) return;
     setLoading(true);
@@ -257,7 +257,7 @@ export default function Dashboard() {
       for (const sub of subsToRemove) {
         await apiDelete('submission', sub.id);
       }
-      alert(`${subsToRemove.length} correÃ§Ãµes foram apagadas.`);
+      alert(`${subsToRemove.length} correções foram apagadas.`);
       await fetchDB();
     } catch (e: any) { alert('Erro: ' + e.message); }
     finally { setLoading(false); }
@@ -270,7 +270,7 @@ export default function Dashboard() {
     setShowSubjectModal(true);
   };
   const saveSubject = async () => {
-    if (!newSubData.name || !newSubData.code) return alert('Preencha nome e cÃ³digo');
+    if (!newSubData.name || !newSubData.code) return alert('Preencha nome e código');
     try {
       if (editingSubject) {
         await apiPost('subject-update', { id: editingSubject.id, ...newSubData });
@@ -313,7 +313,7 @@ export default function Dashboard() {
   };
 
   const extractRAFromName = async () => {
-    if (!confirm('Deseja analisar os nomes dos alunos para extrair o RA (ex: Nome - 12345)? Isso atualizarÃ¡ os cadastros.')) return;
+    if (!confirm('Deseja analisar os nomes dos alunos para extrair o RA (ex: Nome - 12345)? Isso atualizará os cadastros.')) return;
     setLoading(true);
     let count = 0;
     try {
@@ -350,7 +350,7 @@ export default function Dashboard() {
     if (!enrollSubjectId) return;
     const subject = dbData.subjects.find(s => s.id === enrollSubjectId);
     if (subject?.closed) {
-      alert(`A matÃ©ria "${subject.name}" estÃ¡ fechada. NÃ£o Ã© possÃ­vel alterar a enturmaÃ§Ã£o.`);
+      alert(`A matéria "${subject.name}" está fechada. Não é possível alterar a enturmação.`);
       return;
     }
 
@@ -358,7 +358,7 @@ export default function Dashboard() {
     if (currentSubId && currentSubId !== enrollSubjectId) {
        const currentSub = dbData.subjects.find(s => s.id === currentSubId);
        if (currentSub?.closed) {
-         alert(`O aluno estÃ¡ associado Ã  matÃ©ria "${currentSub.name}" que jÃ¡ foi fechada.`);
+         alert(`O aluno está associado à matéria "${currentSub.name}" que já foi fechada.`);
          return;
        }
     }
@@ -400,7 +400,7 @@ export default function Dashboard() {
       alert(`Foram importados ${count} alunos com sucesso!`);
       await fetchDB();
     } catch (err: any) {
-      alert('Erro na importaÃ§Ã£o: ' + err.message);
+      alert('Erro na importação: ' + err.message);
     }
     e.target.value = '';
   };
@@ -424,7 +424,7 @@ export default function Dashboard() {
     setShowActivityModal(true);
   };
   const saveActivity = async () => {
-    if (!newActData.title || !newActData.subjectId) return alert('Preencha tÃ­tulo e matÃ©ria');
+    if (!newActData.title || !newActData.subjectId) return alert('Preencha título e matéria');
     try {
       if (editingActivity) {
         await apiPost('activity-update', { id: editingActivity.id, ...newActData });
@@ -444,13 +444,13 @@ export default function Dashboard() {
       const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
       
       // Extract title: it's on the first line after A.A (which was sliced)
-      // Example: " 01 (26/02/2026): IntroduÃ§Ã£o ao Empreendedorismo"
+      // Example: " 01 (26/02/2026): Introdução ao Empreendedorismo"
       const firstLine = lines[0];
       const titleMatch = firstLine.match(/\s*\d+\s*(?:\([^)]*\))?:\s*(.*)/i) || firstLine.match(/\s*(\d+.*)/);
       const title = titleMatch ? `A.A ${titleMatch[1]}` : `A.A ${firstLine}`;
       
       // Extract everything as description (the instructions)
-      // We look for key terms like "InstruÃ§Ãµes", "Leitura", etc.
+      // We look for key terms like "Instruções", "Leitura", etc.
       const description = lines.slice(1).join('\n');
       
       return { title, description, weight: 1 };
@@ -461,7 +461,7 @@ export default function Dashboard() {
 
   const importParsedActivities = async () => {
     const selectedSubId = newActData.subjectId;
-    if (!selectedSubId) return alert('Selecione a matÃ©ria para a qual deseja importar as atividades.');
+    if (!selectedSubId) return alert('Selecione a matéria para a qual deseja importar as atividades.');
     if (!parsedActs.length) return alert('Nenhuma atividade processada.');
     
     setLoading(true);
@@ -485,7 +485,7 @@ export default function Dashboard() {
     setShowImplModal(true);
   };
   const saveImpl = async () => {
-    if (!newImpl.title) return alert('Informe o tÃ­tulo');
+    if (!newImpl.title) return alert('Informe o título');
     try {
       if (editingImpl) {
         await apiPost('implementacao-update', { id: editingImpl.id, ...newImpl });
@@ -508,14 +508,14 @@ export default function Dashboard() {
   const saveSettings = async (configsToSave?: AppConfig) => {
     try {
       await apiPost('configs', configsToSave || tempConfigs);
-      alert('ConfiguraÃ§Ãµes salvas!');
+      alert('Configurações salvas!');
       await fetchDB();
     } catch (e: any) { alert('Erro: ' + e.message); }
   };
 
   // â”€â”€ SINGLE UPLOAD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleFileUpload = async (file: File) => {
-    if (!uploadName || !uploadSubject) return alert('Selecione aluno e matÃ©ria');
+    if (!uploadName || !uploadSubject) return alert('Selecione aluno e matéria');
     setUploading(true);
     try {
       const fd = new FormData();
@@ -561,7 +561,7 @@ export default function Dashboard() {
           subjectId: batchSubjectId,
           activityId: batchActivityId
       });
-      alert('SessÃ£o salva! VocÃª pode continuar de onde parou depois.');
+      alert('Sessão salva! Você pode continuar de onde parou depois.');
       setView('dashboard');
     } catch (e:any) { alert(e.message); }
   };
@@ -619,7 +619,7 @@ export default function Dashboard() {
   };
 
   const exportToCanvasCSV = () => {
-    if (!copySubjectId || !copyActivityId) return alert('Selecione matÃ©ria e atividade primeiro.');
+    if (!copySubjectId || !copyActivityId) return alert('Selecione matéria e atividade primeiro.');
     
     const subject = dbData.subjects.find(s => s.id === copySubjectId);
     const activity = dbData.activities.find(a => a.id === copyActivityId);
@@ -680,20 +680,20 @@ export default function Dashboard() {
       <aside className="sidebar">
         <div className="logo"><GraduationCap size={26} strokeWidth={1.5}/><span>AvalIA</span></div>
         <nav className="nav">
-          <p className="nav-label">VisÃ£o Geral</p>
+          <p className="nav-label">Visão Geral</p>
           <NavItem v="dashboard"      icon={BookOpen}    label="Dashboard"/>
           <p className="nav-label">Entidades</p>
-          <NavItem v="subjects"       icon={FileText}    label="MatÃ©rias"/>
+          <NavItem v="subjects"       icon={FileText}    label="Matérias"/>
           <NavItem v="students"       icon={UserPlus}    label="Alunos"/>
-          <NavItem v="enrollment"     icon={Users}       label="EnturmaÃ§Ã£o"/>
+          <NavItem v="enrollment"     icon={Users}       label="Enturmação"/>
           <NavItem v="activities"     icon={Clock}       label="Atividades"/>
           <p className="nav-label">Trabalho</p>
-          <NavItem v="batch"          icon={Layers}      label="CorreÃ§Ã£o"/>
-          <NavItem v="copy"           icon={CheckCircle} label="LanÃ§amento Canvas"/>
-          <NavItem v="reports"        icon={BarChart2}   label="RelatÃ³rios"/>
+          <NavItem v="batch"          icon={Layers}      label="Correção"/>
+          <NavItem v="copy"           icon={CheckCircle} label="Lançamento Canvas"/>
+          <NavItem v="reports"        icon={BarChart2}   label="Relatórios"/>
           <p className="nav-label">Sistema</p>
-          <NavItem v="implementacoes" icon={Lightbulb}   label="ImplementaÃ§Ãµes"/>
-          <NavItem v="settings"       icon={Database}    label="ConfiguraÃ§Ãµes"/>
+          <NavItem v="implementacoes" icon={Lightbulb}   label="Implementações"/>
+          <NavItem v="settings"       icon={Database}    label="Configurações"/>
         </nav>
         <div style={{marginTop: 'auto', paddingTop: 16, borderTop: '1px solid var(--border)', textAlign: 'center', fontSize: 10, color: 'var(--text2)', fontFamily: 'monospace'}}>
           v0.1.0-alpha.1
@@ -717,7 +717,7 @@ export default function Dashboard() {
         {/* â•â• DASHBOARD â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         {view === 'dashboard' && <>
           <header className="header">
-            <div><h1>Painel de AvaliaÃ§Ãµes</h1><p className="subtitle">VisÃ£o Geral do Sistema</p></div>
+            <div><h1>Painel de Avaliações</h1><p className="subtitle">Visão Geral do Sistema</p></div>
             <button className="btn-primary" onClick={() => setShowUpload(true)}><Upload size={16}/> Novo Trabalho</button>
           </header>
 
@@ -731,21 +731,21 @@ export default function Dashboard() {
             </div>
             <div style={{background:'var(--surface2)',padding:'20px 24px',borderRadius:14,border:'1px solid var(--border)',display:'flex',flexDirection:'column',gap:12}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <h3 style={{fontSize:12,color:'var(--text2)',fontWeight:500,textTransform:'uppercase',letterSpacing:'.05em'}}>Total de MatÃ©rias</h3>
+                <h3 style={{fontSize:12,color:'var(--text2)',fontWeight:500,textTransform:'uppercase',letterSpacing:'.05em'}}>Total de Matérias</h3>
                 <div style={{background:'#10b98120',borderRadius:8,padding:6}}><BookOpen size={15} color="#10b981"/></div>
               </div>
               <p style={{fontSize:32,fontWeight:700,lineHeight:1}}>{dbData.subjects.length}</p>
             </div>
             <div style={{background:'var(--surface2)',padding:'20px 24px',borderRadius:14,border:'1px solid var(--border)',display:'flex',flexDirection:'column',gap:12}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <h3 style={{fontSize:12,color:'var(--text2)',fontWeight:500,textTransform:'uppercase',letterSpacing:'.05em'}}>Total de AvaliaÃ§Ãµes</h3>
+                <h3 style={{fontSize:12,color:'var(--text2)',fontWeight:500,textTransform:'uppercase',letterSpacing:'.05em'}}>Total de Avaliações</h3>
                 <div style={{background:'#f59e0b20',borderRadius:8,padding:6}}><Layers size={15} color="#f59e0b"/></div>
               </div>
               <p style={{fontSize:32,fontWeight:700,lineHeight:1}}>{dbData.activities.length}</p>
             </div>
             <div style={{background:'var(--surface2)',padding:'20px 24px',borderRadius:14,border:'1px solid var(--border)',display:'flex',flexDirection:'column',gap:12}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <h3 style={{fontSize:12,color:'var(--text2)',fontWeight:500,textTransform:'uppercase',letterSpacing:'.05em'}}>CorreÃ§Ãµes Realizadas</h3>
+                <h3 style={{fontSize:12,color:'var(--text2)',fontWeight:500,textTransform:'uppercase',letterSpacing:'.05em'}}>Correções Realizadas</h3>
                 <div style={{background:'#10b98120',borderRadius:8,padding:6}}><CheckCircle size={15} color="#10b981"/></div>
               </div>
               <p style={{fontSize:32,fontWeight:700,lineHeight:1}}>{dbData.submissions.filter(s => s.status === 'graded').length}</p>
@@ -753,7 +753,7 @@ export default function Dashboard() {
           </div>
 
           <h2 style={{fontSize:16, marginBottom:20, display:'flex', alignItems:'center', gap:8}}>
-            <Layers size={18} color="var(--accent)"/> HistÃ³rico de CorreÃ§Ãµes Agrupadas
+            <Layers size={18} color="var(--accent)"/> Histórico de Correções Agrupadas
           </h2>
           
           <div className="fade-in" style={{display:'flex', flexDirection:'column', gap:28}}>
@@ -777,14 +777,14 @@ export default function Dashboard() {
                       <BookOpen size={16}/> {subject.name}
                     </h3>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <span className="badge" style={{fontSize:10}}>{subjectSubs.length} correÃ§Ãµes</span>
+                      <span className="badge" style={{fontSize:10}}>{subjectSubs.length} correções</span>
                       <button 
                         className="btn-icon-danger" 
                         style={{ padding: '2px 8px', height: 'auto', fontSize: 10, background: '#ef444415' }} 
                         onClick={() => deleteActivityCorrections(subject.name)}
-                        title={`Apagar todas as correÃ§Ãµes de ${subject.name}`}
+                        title={`Apagar todas as correções de ${subject.name}`}
                       >
-                        <Trash2 size={12}/> Limpar MatÃ©ria
+                        <Trash2 size={12}/> Limpar Matéria
                       </button>
                     </div>
                   </div>
@@ -799,7 +799,7 @@ export default function Dashboard() {
                           <button 
                             className="btn-icon-danger" 
                             style={{padding:4, height:'auto', width:'auto'}} 
-                            title={`Apagar todas as ${subs.length} correÃ§Ãµes de ${actTitle}`}
+                            title={`Apagar todas as ${subs.length} correções de ${actTitle}`}
                             onClick={() => deleteActivityCorrections(subject.name, actTitle)}
                           >
                             <Trash2 size={12}/> <span style={{fontSize:10}}>Limpar Atividade</span>
@@ -808,7 +808,7 @@ export default function Dashboard() {
                         <div className="table-wrap" style={{border:'none', borderRadius:8, background:'var(--bg)'}}>
                           <table className="table table-sm">
                             <thead>
-                              <tr><th>Aluno</th><th>Nota</th><th>Data</th><th style={{textAlign:'right'}}>AÃ§Ãµes</th></tr>
+                              <tr><th>Aluno</th><th>Nota</th><th>Data</th><th style={{textAlign:'right'}}>Ações</th></tr>
                             </thead>
                             <tbody>
                               {subs.sort((a,b) => b.submittedAt.localeCompare(a.submittedAt)).map(sub => {
@@ -820,7 +820,7 @@ export default function Dashboard() {
                                     </td>
                                     <td>
                                       <span className="status-pill" style={{background:cfg.color+'18',color:cfg.color, fontSize:11, padding:'2px 8px'}}>
-                                        <cfg.icon size={11}/> {sub.grade?.toFixed(1) ?? 'â€“'}
+                                        <cfg.icon size={11}/> {sub.grade?.toFixed(1) ?? '“'}
                                       </span>
                                     </td>
                                     <td className="td-muted" style={{fontSize:11}}>{sub.submittedAt.split(' ')[0]}</td>
@@ -846,8 +846,8 @@ export default function Dashboard() {
             {dbData.submissions.length === 0 && (
               <div className="empty-state" style={{background:'var(--surface)', borderRadius:12, padding:40, border:'1px dashed var(--border)'}}>
                 <Layers size={40} style={{opacity:0.2, marginBottom:16}}/>
-                <p>Nenhuma correÃ§Ã£o registrada no sistema.</p>
-                <button className="btn-primary" style={{marginTop:16}} onClick={() => setView('batch')}>Iniciar Nova CorreÃ§Ã£o</button>
+                <p>Nenhuma correção registrada no sistema.</p>
+                <button className="btn-primary" style={{marginTop:16}} onClick={() => setView('batch')}>Iniciar Nova Correção</button>
               </div>
             )}
           </div>
@@ -916,7 +916,7 @@ export default function Dashboard() {
                       s.subject === rSubject?.name &&
                       getActName(s.feedback ?? '') === act.title
                     );
-                    if (!sub) { faltas++; return `<td class="miss">â€”</td>`; }
+                    if (!sub) { faltas++; return `<td class="miss">—</td>`; }
                     const g = sub.grade ?? 0;
                     const cls = g >= 7 ? 'high' : g >= 5 ? 'mid' : 'low';
                     return `<td class="grade ${cls}">${g.toFixed(1)}</td>`;
@@ -935,7 +935,7 @@ export default function Dashboard() {
                 }).join('')}</tbody></table>`;
             }
 
-            const html = `<html><head><title>RelatÃ³rio</title><style>
+            const html = `<html><head><title>Relatório</title><style>
               body{font-family:Arial,sans-serif;font-size:11px;padding:20px;color:#111}
               h1{font-size:16px;margin-bottom:2px}p.sub{color:#666;margin-bottom:12px}
               .stats{display:flex;gap:16px;margin-bottom:16px}
@@ -946,11 +946,11 @@ export default function Dashboard() {
               td{padding:6px 10px;border-bottom:1px solid #eee}
               .grade{font-weight:bold}.high{color:#059669}.mid{color:#d97706}.low{color:#dc2626}.miss{color:#aaa}
             </style></head><body>
-              <h1>RelatÃ³rio de AvaliaÃ§Ãµes â€” ${rSubject?.name ?? 'Geral'}</h1>
-              <p class="sub">${rActivity ? rActivity.title + ' Â· ' : ''}${new Date().toLocaleDateString('pt-BR')}</p>
+              <h1>Relatório de Avaliações — ${rSubject?.name ?? 'Geral'}</h1>
+              <p class="sub">${rActivity ? rActivity.title + ' · ' : ''}${new Date().toLocaleDateString('pt-BR')}</p>
               ${!isPivot && grades.length ? `<div class="stats">
-                <div class="stat"><b>${detailRows.length}</b>CorreÃ§Ãµes</div>
-                <div class="stat"><b>${avg.toFixed(1)}</b>MÃ©dia</div>
+                <div class="stat"><b>${detailRows.length}</b>Correções</div>
+                <div class="stat"><b>${avg.toFixed(1)}</b>Média</div>
                 <div class="stat"><b>${max.toFixed(1)}</b>Maior</div>
                 <div class="stat"><b>${min.toFixed(1)}</b>Menor</div>
                 <div class="stat"><b>${passing}/${grades.length}</b>Aprov.</div>
@@ -968,7 +968,7 @@ export default function Dashboard() {
             <div className="fade-in">
               <header className="header">
                 <div>
-                  <h1>RelatÃ³rios</h1>
+                  <h1>Relatórios</h1>
                   <p className="subtitle">Pauta de notas e desempenho por atividade</p>
                 </div>
                 <button className="btn-primary" onClick={exportPDF} disabled={!reportSubjectId}>
@@ -979,16 +979,16 @@ export default function Dashboard() {
               {/* Filtros */}
               <div className="card" style={{padding:'20px 24px', marginBottom:24, display:'grid', gridTemplateColumns:'1fr 1fr', gap:20}}>
                 <div>
-                  <label className="field-label">MatÃ©ria *</label>
+                  <label className="field-label">Matéria *</label>
                   <select className="input" value={reportSubjectId} onChange={e => { setReportSubjectId(e.target.value); setReportActivityId(''); }}>
-                    <option value="">â€” Selecione uma matÃ©ria â€”</option>
+                    <option value="">— Selecione uma matéria —</option>
                     {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="field-label">Filtrar por Atividade <span style={{color:'var(--text2)', fontWeight:400}}>(opcional)</span></label>
                   <select className="input" value={reportActivityId} onChange={e => setReportActivityId(e.target.value)} disabled={!reportSubjectId}>
-                    <option value="">Todas as atividades (visÃ£o geral)</option>
+                    <option value="">Todas as atividades (visão geral)</option>
                     {activitiesWithSubs.map(a => <option key={a.id} value={a.id}>{a.title}</option>)}
                   </select>
                 </div>
@@ -997,7 +997,7 @@ export default function Dashboard() {
               {!reportSubjectId && (
                 <div className="empty-state" style={{background:'var(--surface)', borderRadius:12, padding:48, border:'1px dashed var(--border)'}}>
                   <FileText size={40} style={{opacity:0.2, marginBottom:16}}/>
-                  <p>Selecione uma matÃ©ria para gerar o relatÃ³rio.</p>
+                  <p>Selecione uma matéria para gerar o relatório.</p>
                 </div>
               )}
 
@@ -1006,7 +1006,7 @@ export default function Dashboard() {
                 if (activitiesWithSubs.length === 0) return (
                   <div className="empty-state" style={{background:'var(--surface)', borderRadius:12, padding:40, border:'1px dashed var(--border)'}}>
                     <FileText size={40} style={{opacity:0.2, marginBottom:16}}/>
-                    <p>Nenhuma atividade corrigida nesta matÃ©ria ainda.</p>
+                    <p>Nenhuma atividade corrigida nesta matéria ainda.</p>
                   </div>
                 );
                 return (
@@ -1035,7 +1035,7 @@ export default function Dashboard() {
                                   s.subject === rSubject?.name &&
                                   getActName(s.feedback ?? '') === act.title
                                 );
-                                if (!sub) { faltas++; return <td key={act.id} style={{textAlign:'center', color:'#6b7280', fontSize:12}}>â€”</td>; }
+                                if (!sub) { faltas += 2; return <td key={act.id} style={{textAlign:'center', color:'#6b7280', fontSize:12}}>—</td>; }
                                 const g = sub.grade ?? 0;
                                 return (
                                   <td key={act.id} style={{textAlign:'center', cursor:'pointer'}} onClick={() => setSelected(sub)} title="Ver feedback">
@@ -1055,12 +1055,12 @@ export default function Dashboard() {
                 );
               })()}
 
-              {/* â”€â”€ DETAIL TABLE (atividade especÃ­fica) â”€â”€ */}
+              {/* â”€â”€ DETAIL TABLE (atividade específica) â”€â”€ */}
               {reportSubjectId && reportActivityId && (() => {
                 if (detailRows.length === 0) return (
                   <div className="empty-state" style={{background:'var(--surface)', borderRadius:12, padding:40, border:'1px dashed var(--border)'}}>
                     <FileText size={40} style={{opacity:0.2, marginBottom:16}}/>
-                    <p>Nenhuma correÃ§Ã£o para esta atividade ainda.</p>
+                    <p>Nenhuma correção para esta atividade ainda.</p>
                   </div>
                 );
                 return (
@@ -1068,8 +1068,8 @@ export default function Dashboard() {
                     {/* Stats */}
                     <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap:12, marginBottom:20}}>
                       {[
-                        { label:'CorreÃ§Ãµes',  val: detailRows.length,      color:'#6366f1' },
-                        { label:'MÃ©dia',      val: avg.toFixed(1),         color: gc(avg)  },
+                        { label:'Correções',  val: detailRows.length,      color:'#6366f1' },
+                        { label:'Média',      val: avg.toFixed(1),         color: gc(avg)  },
                         { label:'Maior Nota', val: max.toFixed(1),         color:'#10b981' },
                         { label:'Menor Nota', val: min.toFixed(1),         color:'#ef4444' },
                         { label:'Aprovados',  val: `${passing}/${grades.length}`, color:'#10b981' },
@@ -1123,15 +1123,15 @@ export default function Dashboard() {
         {/* â•â• MATÃ‰RIAS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         {view === 'subjects' && <>
           <header className="header">
-            <div><h1>MatÃ©rias</h1><p className="subtitle">{dbData.subjects.length} disciplinas</p></div>
-            <button className="btn-primary" onClick={() => openSubjectModal()}><Plus size={16}/> Nova MatÃ©ria</button>
+            <div><h1>Matérias</h1><p className="subtitle">{dbData.subjects.length} disciplinas</p></div>
+            <button className="btn-primary" onClick={() => openSubjectModal()}><Plus size={16}/> Nova Matéria</button>
           </header>
           <div className="table-wrap fade-in">
             <table className="table">
-              <thead><tr><th>Nome</th><th>CÃ³digo</th><th>Ementa</th><th></th></tr></thead>
+              <thead><tr><th>Nome</th><th>Código</th><th>Ementa</th><th></th></tr></thead>
               <tbody>
                 {dbData.subjects.length === 0
-                  ? <tr><td colSpan={4}><div className="empty-state"><FileText size={40}/><p>Nenhuma matÃ©ria.</p></div></td></tr>
+                  ? <tr><td colSpan={4}><div className="empty-state"><FileText size={40}/><p>Nenhuma matéria.</p></div></td></tr>
                   : dbData.subjects.map(s => {
                     const chunks = syllabusChunks(s.syllabus ?? '');
                     return (
@@ -1165,7 +1165,7 @@ export default function Dashboard() {
           <header className="header">
             <div><h1>Alunos</h1><p className="subtitle">{dbData.students.length} estudantes</p></div>
             <div className="header-actions">
-              <button className="btn-ghost" onClick={extractRAFromName} title="Extrai o nÃºmero apÃ³s o '-' do nome e coloca no campo RA">
+              <button className="btn-ghost" onClick={extractRAFromName} title="Extrai o número após o '-' do nome e coloca no campo RA">
                 <Hash size={16}/> Extrair RA do Nome
               </button>
               <label className="btn-ghost" style={{cursor:'pointer', position:'relative', overflow:'hidden'}}>
@@ -1177,7 +1177,7 @@ export default function Dashboard() {
           </header>
           <div className="table-wrap fade-in">
             <table className="table">
-              <thead><tr><th>Nome</th><th>RA</th><th>Email</th><th>Turma</th><th>MatÃ©ria</th><th></th></tr></thead>
+              <thead><tr><th>Nome</th><th>RA</th><th>Email</th><th>Turma</th><th>Matéria</th><th></th></tr></thead>
               <tbody>
                 {dbData.students.length === 0
                   ? <tr><td colSpan={5}><div className="empty-state"><UserPlus size={40}/><p>Nenhum aluno.</p></div></td></tr>
@@ -1187,7 +1187,7 @@ export default function Dashboard() {
                     return (
                       <tr key={s.id}>
                         <td className="td-name">{s.name}</td>
-                        <td style={{fontSize:12, fontWeight:600}}>{s.ra || <span style={{opacity:0.3}}>â€”</span>}</td>
+                        <td style={{fontSize:12, fontWeight:600}}>{s.ra || <span style={{opacity:0.3}}>—</span>}</td>
                         <td className="td-muted">{s.email}</td>
                         <td>{!s.turma ? <span style={{fontSize:11,color:'var(--text2)'}}>Sem turma</span> : <span className="badge badge-blue">{s.turma}</span>}</td>
                         <td>{sub ? <span className="badge-subject">{sub.name}</span> : <span style={{fontSize:11,color:'var(--text2)'}}>Livre</span>}</td>
@@ -1208,7 +1208,7 @@ export default function Dashboard() {
         {/* â•â• ATIVIDADES â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•= */}
         {view === 'activities' && <>
           <header className="header">
-            <div><h1>Atividades</h1><p className="subtitle">{dbData.activities.length} avaliaÃ§Ãµes</p></div>
+            <div><h1>Atividades</h1><p className="subtitle">{dbData.activities.length} avaliações</p></div>
             <div className="header-actions">
               <button className="btn-ghost" onClick={() => setShowImportActModal(true)}><Sparkles size={16}/> Importar da Ementa</button>
               <button className="btn-primary" onClick={() => openActivityModal()}><Plus size={16}/> Nova Atividade</button>
@@ -1216,7 +1216,7 @@ export default function Dashboard() {
           </header>
           <div className="table-wrap fade-in">
             <table className="table">
-              <thead><tr><th>TÃ­tulo</th><th>MatÃ©ria</th><th>Peso</th><th>CritÃ©rio IA</th><th></th></tr></thead>
+              <thead><tr><th>Título</th><th>Matéria</th><th>Peso</th><th>Critério IA</th><th></th></tr></thead>
               <tbody>
                 {dbData.activities.length === 0
                   ? <tr><td colSpan={5}><div className="empty-state"><Clock size={40}/><p>Nenhuma atividade.</p></div></td></tr>
@@ -1226,8 +1226,8 @@ export default function Dashboard() {
                       <tr key={a.id}>
                         <td className="td-name">{a.title}</td>
                         <td><span className="badge-subject">{sub?.name ?? a.subjectId}</span></td>
-                        <td className="td-muted">{a.weight}Ã—</td>
-                        <td className="td-desc">{a.description || <span style={{opacity:.4}}>â€”</span>}</td>
+                        <td className="td-muted">{a.weight}×</td>
+                        <td className="td-desc">{a.description || <span style={{opacity:.4}}>—</span>}</td>
                         <td>
                           <div className="actions">
                             <button className="btn-icon" onClick={() => openActivityModal(a)}><Edit2 size={13}/></button>
@@ -1246,10 +1246,10 @@ export default function Dashboard() {
         {/* â•â• ENTURMAÃ‡ÃƒO â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•= */}
         {view === 'enrollment' && <>
           <header className="header" style={{flexDirection:'column', alignItems:'flex-start', gap:16}}>
-            <div><h1>EnturmaÃ§Ã£o</h1><p className="subtitle">Associe alunos a matÃ©rias clicando duas vezes sobre o card.</p></div>
+            <div><h1>Enturmação</h1><p className="subtitle">Associe alunos a matérias clicando duas vezes sobre o card.</p></div>
             <div style={{display:'flex', gap:16, alignItems:'center', flexWrap:'wrap'}}>
               <select className="input" style={{maxWidth:300, background:'var(--surface)'}} value={enrollSubjectId} onChange={e => setEnrollSubjectId(e.target.value)}>
-                <option value="">-- Selecione uma matÃ©ria --</option>
+                <option value="">-- Selecione uma matéria --</option>
                 {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code}) {s.closed ? 'ðŸ”’' : ''}</option>)}
               </select>
 
@@ -1264,7 +1264,7 @@ export default function Dashboard() {
                       try { await apiPost('subject-closed', { id: sub.id, closed: newClosed }); } 
                       catch(e:any) { alert(e.message); await fetchDB(); }
                     }} />
-                    <span>Bloquear EnturmaÃ§Ã£o (MatÃ©ria Fechada)</span>
+                    <span>Bloquear Enturmação (Matéria Fechada)</span>
                   </label>
                 );
               })()}
@@ -1272,7 +1272,7 @@ export default function Dashboard() {
           </header>
 
           {!enrollSubjectId ? (
-            <div className="empty-state"><Users size={40}/><p>Selecione uma matÃ©ria acima para comeÃ§ar a enturmar.</p></div>
+            <div className="empty-state"><Users size={40}/><p>Selecione uma matéria acima para começar a enturmar.</p></div>
           ) : (() => {
             const subject = dbData.subjects.find(s => s.id === enrollSubjectId);
             const isClosed = !!subject?.closed;
@@ -1285,7 +1285,7 @@ export default function Dashboard() {
                   className="kanban-card" 
                   style={{cursor: isClosed ? 'not-allowed' : 'pointer', userSelect:'none', display:'flex', justifyContent:'space-between', alignItems:'center', opacity: isClosed ? 0.6 : 1}}
                   onDoubleClick={isClosed ? undefined : onDoubleClick}
-                  title={isClosed ? 'MatÃ©ria fechada para ediÃ§Ã£o' : 'DÃª um duplo-clique para mover'}
+                  title={isClosed ? 'Matéria fechada para edição' : 'Dê um duplo-clique para mover'}
                 >
                   <div>
                     <p className="kanban-card-title">{s.name}</p>
@@ -1301,10 +1301,10 @@ export default function Dashboard() {
             return (
               <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:24}} className="fade-in">
                 <div style={{background:'var(--surface)', padding:16, borderRadius:12, border:'1px solid var(--border)', display:'flex', flexDirection:'column'}}>
-                  <h3 style={{marginBottom:16, display:'flex', alignItems:'center', gap:8}}><UserPlus size={16}/> NÃ£o Enturmados <span className="badge">{notInSubject.length}</span></h3>
+                  <h3 style={{marginBottom:16, display:'flex', alignItems:'center', gap:8}}><UserPlus size={16}/> Não Enturmados <span className="badge">{notInSubject.length}</span></h3>
                   <div style={{display:'flex', flexDirection:'column', gap:8, flex:1, overflowY:'auto'}}>
                     {notInSubject.map(s => <StudentCard key={s.id} s={s} onDoubleClick={() => toggleStudentEnrollment(s)}/>)}
-                    {notInSubject.length === 0 && <p style={{fontSize:12, color:'var(--text2)', textAlign:'center', marginTop:20}}>Todos os alunos cadastrados jÃ¡ estÃ£o nesta matÃ©ria.</p>}
+                    {notInSubject.length === 0 && <p style={{fontSize:12, color:'var(--text2)', textAlign:'center', marginTop:20}}>Todos os alunos cadastrados já estão nesta matéria.</p>}
                   </div>
                 </div>
 
@@ -1312,7 +1312,7 @@ export default function Dashboard() {
                   <h3 style={{marginBottom:16, display:'flex', alignItems:'center', gap:8}}><CheckCircle size={16} color="var(--accent)"/> Em {subject?.name} <span className="badge badge-blue">{inSubject.length}</span></h3>
                   <div style={{display:'flex', flexDirection:'column', gap:8, flex:1, overflowY:'auto'}}>
                     {inSubject.map(s => <StudentCard key={s.id} s={s} onDoubleClick={() => toggleStudentEnrollment(s)}/>)}
-                    {inSubject.length === 0 && <p style={{fontSize:12, color:'var(--text2)', textAlign:'center', marginTop:20}}>Nenhum aluno associado. DÃª 2 cliques num card ao lado.</p>}
+                    {inSubject.length === 0 && <p style={{fontSize:12, color:'var(--text2)', textAlign:'center', marginTop:20}}>Nenhum aluno associado. Dê 2 cliques num card ao lado.</p>}
                   </div>
                 </div>
               </div>
@@ -1327,10 +1327,10 @@ export default function Dashboard() {
           <div className="fade-in">
             <header className="header" style={{ marginBottom: 24 }}>
               <div>
-                <h1>CorreÃ§Ã£o</h1>
+                <h1>Correção</h1>
                 <p className="subtitle">
-                  {batchStep === 'upload' && "Fase 1: Upload e IdentificaÃ§Ã£o"}
-                  {batchStep === 'validate' && "Fase 2: ValidaÃ§Ã£o de Contexto"}
+                  {batchStep === 'upload' && "Fase 1: Upload e Identificação"}
+                  {batchStep === 'validate' && "Fase 2: Validação de Contexto"}
                   {batchStep === 'results' && "Fase 3: Resultados e Feedbacks"}
                 </p>
               </div>
@@ -1344,7 +1344,7 @@ export default function Dashboard() {
                     <button className="btn-primary" 
                       disabled={batchEntries.length === 0 || !batchSubjectId}
                       onClick={() => setBatchStep('validate')}>
-                      PrÃ³ximo Passo <ChevronRight size={16}/>
+                      Próximo Passo <ChevronRight size={16}/>
                     </button>
                   </>
                 )}
@@ -1357,7 +1357,7 @@ export default function Dashboard() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
                   <div className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 0 }}>
-                      <BookOpen size={16} color="var(--accent)"/> 1. Selecione a MatÃ©ria
+                      <BookOpen size={16} color="var(--accent)"/> 1. Selecione a Matéria
                     </label>
                     <select className="input" style={{ width: '100%' }} value={batchSubjectId} onChange={e => {
                       setBatchSubjectId(e.target.value);
@@ -1415,7 +1415,7 @@ export default function Dashboard() {
                   <button className="btn-primary" 
                     disabled={batchEntries.length === 0 || !batchSubjectId}
                     onClick={() => setBatchStep('validate')}>
-                    PrÃ³ximo Passo <ChevronRight size={16}/>
+                    Próximo Passo <ChevronRight size={16}/>
                   </button>
                 </div>
               </div>
@@ -1431,7 +1431,7 @@ export default function Dashboard() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                       <div className="card" style={{ padding: 20, borderLeft: '4px solid var(--accent)', flex: 1 }}>
                         <h3 style={{ fontSize: 13, color:'var(--text1)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <BookOpen size={16} color="var(--accent)"/> OrientaÃ§Ãµes da MatÃ©ria
+                          <BookOpen size={16} color="var(--accent)"/> Orientações da Matéria
                         </h3>
                         <p style={{ fontSize: 13, fontWeight: 600 }}>{sub?.name}</p>
                         <p style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 10 }}>{sub?.code}</p>
@@ -1442,11 +1442,11 @@ export default function Dashboard() {
 
                       <div className="card" style={{ padding: 20, borderLeft: '4px solid #10b981', flex: 1 }}>
                         <h3 style={{ fontSize: 13, color:'var(--text1)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <Sparkles size={16} color="#10b981"/> OrientaÃ§Ãµes da Atividade
+                          <Sparkles size={16} color="#10b981"/> Orientações da Atividade
                         </h3>
                         <label className="field-label">Vincular a uma Atividade Existente</label>
                         <select className="input" value={batchActivityId} onChange={e => setBatchActivityId(e.target.value)}>
-                          <option value="">-- AvaliaÃ§Ã£o Geral (Sem CritÃ©rio EspecÃ­fico) --</option>
+                          <option value="">-- Avaliação Geral (Sem Critério Específico) --</option>
                           {dbData.activities.filter(a => a.subjectId === batchSubjectId).map(a => (
                             <option key={a.id} value={a.id}>{a.title}</option>
                           ))}
@@ -1455,7 +1455,7 @@ export default function Dashboard() {
                           const act = dbData.activities.find(a => a.id === batchActivityId);
                           return (
                             <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text2)', background: 'var(--surface2)', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}>
-                              <b>CritÃ©rios:</b><br/>{act?.description || 'Nenhum critÃ©rio detalhado.'}
+                              <b>Critérios:</b><br/>{act?.description || 'Nenhum critério detalhado.'}
                             </div>
                           );
                         })()}
@@ -1470,14 +1470,14 @@ export default function Dashboard() {
                           return (
                             <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--surface2)', borderRadius: 6, fontSize: 12, border: '1px solid var(--border)' }}>
                               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 10 }}>{i+1}. {e.filename}</span>
-                              <span style={{ fontWeight: 600, color: 'var(--accent)', flexShrink: 0 }}>{stu?.name || 'NÃ£o associado'}</span>
+                              <span style={{ fontWeight: 600, color: 'var(--accent)', flexShrink: 0 }}>{stu?.name || 'Não associado'}</span>
                             </div>
                           );
                         })}
                       </div>
                       <div style={{ marginTop: 20, padding: 16, background: 'var(--accent)10', borderRadius: 8, border: '1px solid var(--accent)30' }}>
                         <p style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 600, marginBottom: 4 }}>Pronto para processar?</p>
-                        <p style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.4 }}>O sistema usarÃ¡ o novo modelo <b>Gemini 2.0 Flash-Lite</b> para uma anÃ¡lise ultra-rÃ¡pida e precisa.</p>
+                        <p style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.4 }}>O sistema usará o novo modelo <b>Gemini 2.0 Flash-Lite</b> para uma análise ultra-rápida e precisa.</p>
                       </div>
                     </div>
                   </div>
@@ -1487,7 +1487,7 @@ export default function Dashboard() {
                       {!batchActivityId && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#f59e0b', background: '#f59e0b15', padding: '8px 14px', borderRadius: 8, border: '1px solid #f59e0b40' }}>
                           <AlertCircle size={14}/>
-                          <span><strong>Atividade nÃ£o selecionada.</strong> As correÃ§Ãµes irÃ£o para o grupo "Geral".</span>
+                          <span><strong>Atividade não selecionada.</strong> As correções irão para o grupo "Geral".</span>
                         </div>
                       )}
                       {batchActivityId && (() => {
@@ -1503,7 +1503,7 @@ export default function Dashboard() {
                     <div style={{ display: 'flex', gap: 12 }}>
                       <button className="btn-ghost" onClick={() => setBatchStep('upload')}>Voltar</button>
                       <button className="btn-primary" onClick={runBatch}>
-                        <Sparkles size={16}/> Enviar para CorreÃ§Ã£o
+                        <Sparkles size={16}/> Enviar para Correção
                       </button>
                     </div>
                   </div>
@@ -1518,7 +1518,7 @@ export default function Dashboard() {
                   <div className="empty-state" style={{ height: 400 }}>
                     <div className="spin" style={{ marginBottom: 20 }}><RefreshCw size={48} color="var(--accent)"/></div>
                     <h2>Corrigindo Trabalhos...</h2>
-                    <p>Aguarde enquanto a IA analisa cada documento baseado na ementa e critÃ©rios.</p>
+                    <p>Aguarde enquanto a IA analisa cada documento baseado na ementa e critérios.</p>
                   </div>
                 ) : (
                   <div>
@@ -1540,7 +1540,7 @@ export default function Dashboard() {
                             <th>Aluno</th>
                             <th>Status/Nota</th>
                             <th>Feedback / Erro</th>
-                            <th>AÃ§Ãµes</th>
+                            <th>Ações</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1569,7 +1569,7 @@ export default function Dashboard() {
                                       <button className="btn-icon" onClick={() => setSelected(e.result!)} title="Ver Detalhes">
                                         <ChevronRight size={14}/>
                                       </button>
-                                      <button className="btn-icon-danger" onClick={() => del('submission', e.result!.id)} title="Excluir CorreÃ§Ã£o">
+                                      <button className="btn-icon-danger" onClick={() => del('submission', e.result!.id)} title="Excluir Correção">
                                         <Trash2 size={14}/>
                                       </button>
                                     </>
@@ -1595,7 +1595,7 @@ export default function Dashboard() {
                         await apiPost('batch-state', null);
                         await fetchDB();
                       }}>
-                        Nova CorreÃ§Ã£o
+                        Nova Correção
                       </button>
                     </div>
                   </div>
@@ -1610,7 +1610,7 @@ export default function Dashboard() {
           <div className="fade-in">
             <header className="header" style={{ marginBottom: 24 }}>
               <div>
-                <h1>LanÃ§amento Canvas</h1>
+                <h1>Lançamento Canvas</h1>
                 <p className="subtitle">Interface de apoio para o sistema da faculdade</p>
               </div>
               <div style={{ display: 'flex', gap: 12 }}>
@@ -1625,7 +1625,7 @@ export default function Dashboard() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
               <div className="card" style={{ padding: 24 }}>
-                <label className="field-label">1. Selecione a MatÃ©ria</label>
+                <label className="field-label">1. Selecione a Matéria</label>
                 <select className="input" style={{ width: '100%' }} value={copySubjectId} onChange={e => {
                   setCopySubjectId(e.target.value);
                   setCopyActivityId('');
@@ -1653,7 +1653,7 @@ export default function Dashboard() {
                       <th style={{ width: '250px' }}>Nome do Aluno</th>
                       <th style={{ width: '100px' }}>Nota</th>
                       <th>Conceito / Feedback</th>
-                      <th style={{ width: '120px' }}>AÃ§Ãµes</th>
+                      <th style={{ width: '120px' }}>Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1742,7 +1742,7 @@ export default function Dashboard() {
           <div className="fade-in">
             <header className="header" style={{ marginBottom: 24 }}>
               <div>
-                <h1>RelatÃ³rios AcadÃªmicos</h1>
+                <h1>Relatórios Acadêmicos</h1>
                 <p className="subtitle">Gere pautas de notas e faltas em PDF</p>
               </div>
               <button className="btn-icon" onClick={fetchDB} title="Recarregar Dados">
@@ -1753,14 +1753,14 @@ export default function Dashboard() {
             <div className="card" style={{ padding: 24, marginBottom: 24 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: 16 }}>
                 <div>
-                  <label className="field-label">Tipo de RelatÃ³rio</label>
+                  <label className="field-label">Tipo de Relatório</label>
                   <div className="toggle-group" style={{ marginTop: 0 }}>
-                    <button className={reportType === 'subject' ? 'active' : ''} onClick={() => setReportType('subject')}>Por MatÃ©ria</button>
+                    <button className={reportType === 'subject' ? 'active' : ''} onClick={() => setReportType('subject')}>Por Matéria</button>
                     <button className={reportType === 'activity' ? 'active' : ''} onClick={() => setReportType('activity')}>Por Atividade</button>
                   </div>
                 </div>
                 <div>
-                  <label className="field-label">MatÃ©ria</label>
+                  <label className="field-label">Matéria</label>
                   <select className="input" value={reportSubjectId} onChange={e => {
                     setReportSubjectId(e.target.value);
                     setReportActivityId('');
@@ -1786,11 +1786,11 @@ export default function Dashboard() {
             {reportSubjectId && (reportType === 'subject' || reportActivityId) && (
               <div className="card" style={{ padding: 24, textAlign: 'center' }}>
                 <BarChart2 size={48} color="var(--accent)" style={{ marginBottom: 16, opacity: 0.5 }} />
-                <h3>{reportType === 'subject' ? 'RelatÃ³rio Geral da MatÃ©ria' : 'RelatÃ³rio por Atividade'}</h3>
+                <h3>{reportType === 'subject' ? 'Relatório Geral da Matéria' : 'Relatório por Atividade'}</h3>
                 <p style={{ color: 'var(--text2)', marginBottom: 20 }}>
                   {reportType === 'subject' 
                     ? 'Lista horizontal com todas as atividades, notas finais e faltas totais.'
-                    : 'Lista detalhada com nota, resumo da correÃ§Ã£o e faltas desta atividade especÃ­fica.'}
+                    : 'Lista detalhada com nota, resumo da correção e faltas desta atividade específica.'}
                 </p>
                 <button className="btn-primary" style={{ padding: '12px 32px' }} onClick={async () => {
                   const { jsPDF } = await import('jspdf');
@@ -1800,23 +1800,23 @@ export default function Dashboard() {
                   
                   // Header using global settings
                   doc.setFontSize(18);
-                  doc.text(dbData.configs.institution || 'RelatÃ³rio de Notas', 14, 20);
+                  doc.text(dbData.configs.institution || 'Relatório de Notas', 14, 20);
                   doc.setFontSize(11);
                   doc.setTextColor(100);
-                  doc.text(`Professor: ${dbData.configs.professor || 'NÃ£o informado'}`, 14, 28);
-                  doc.text(`MatÃ©ria: ${sub?.name} (${sub?.code})`, 14, 34);
+                  doc.text(`Professor: ${dbData.configs.professor || 'Não informado'}`, 14, 28);
+                  doc.text(`Matéria: ${sub?.name} (${sub?.code})`, 14, 34);
                   if (reportType === 'activity') {
                     const act = dbData.activities.find(a => a.id === reportActivityId);
                     doc.text(`Atividade: ${act?.title}`, 14, 40);
                   }
-                  doc.text(`Data de EmissÃ£o: ${new Date().toLocaleDateString()}`, doc.internal.pageSize.width - 60, 20);
+                  doc.text(`Data de Emissão: ${new Date().toLocaleDateString()}`, doc.internal.pageSize.width - 60, 20);
 
                   let head: string[][] = [];
                   let body: string[][] = [];
 
                   if (reportType === 'subject') {
                     const acts = dbData.activities.filter(a => a.subjectId === reportSubjectId);
-                    head = [['Aluno', ...acts.flatMap(a => [`${a.title} (N)`, `${a.title} (F)`]), 'MÃ©dia Final', 'Total Faltas']];
+                    head = [['Aluno', ...acts.flatMap(a => [`${a.title} (N)`, `${a.title} (F)`]), 'Média Final', 'Total Faltas']];
                     body = dbData.students
                       .filter(s => (s.subjectIds || []).includes(reportSubjectId))
                       .sort((a,b) => a.name.localeCompare(b.name))
@@ -1841,7 +1841,7 @@ export default function Dashboard() {
                         return row;
                       });
                   } else {
-                    head = [['Aluno', 'Nota', 'Faltas', 'Resumo da CorreÃ§Ã£o']];
+                    head = [['Aluno', 'Nota', 'Faltas', 'Resumo da Correção']];
                     body = dbData.students
                       .filter(s => (s.subjectIds || []).includes(reportSubjectId))
                       .sort((a,b) => a.name.localeCompare(b.name))
@@ -1853,7 +1853,7 @@ export default function Dashboard() {
                         if (submission) {
                           return [stu.name, submission.grade?.toFixed(1) || '0.0', '0', submission.feedback || 'Sem feedback'];
                         }
-                        return [stu.name, '0.0', '2', 'NÃ£o entregou / Ausente'];
+                        return [stu.name, '0.0', '2', 'Não entregou / Ausente'];
                       });
                   }
 
@@ -1866,7 +1866,7 @@ export default function Dashboard() {
 
                   doc.save(`Relatorio_${sub?.code || 'Aura'}_${reportType}.pdf`);
                 }}>
-                  Gerar PDF ({reportType === 'subject' ? 'MatÃ©ria' : 'Atividade'})
+                  Gerar PDF ({reportType === 'subject' ? 'Matéria' : 'Atividade'})
                 </button>
               </div>
             )}
@@ -1876,7 +1876,7 @@ export default function Dashboard() {
         {/* â•â• IMPLEMENTAÃ‡Ã•ES â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•= */}
         {view === 'implementacoes' && <>
           <header className="header">
-            <div><h1>ImplementaÃ§Ãµes</h1><p className="subtitle">GestÃ£o de ideias e categorias</p></div>
+            <div><h1>Implementações</h1><p className="subtitle">Gestão de ideias e categorias</p></div>
             <button className="btn-primary" onClick={() => openImplModal()}><Plus size={16}/> Nova Ideia</button>
           </header>
 
@@ -1911,7 +1911,7 @@ export default function Dashboard() {
                         </div>
                         <div style={{display:'flex',gap:8,marginTop:10}}>
                           <button style={{flex:1,fontSize:9}} className="btn-ghost" onClick={() => cycleStatus(imp, true)}>Voltar</button>
-                          <button style={{flex:1,fontSize:9}} className="btn-primary" onClick={() => cycleStatus(imp)}>PrÃ³ximo</button>
+                          <button style={{flex:1,fontSize:9}} className="btn-primary" onClick={() => cycleStatus(imp)}>Próximo</button>
                         </div>
                       </div>
                     ))}
@@ -1926,8 +1926,8 @@ export default function Dashboard() {
         {view === 'settings' && <>
           <header className="header">
             <div>
-              <h1>ConfiguraÃ§Ãµes do Sistema</h1>
-              <p className="subtitle">GestÃ£o global e personalizaÃ§Ã£o da plataforma</p>
+              <h1>Configurações do Sistema</h1>
+              <p className="subtitle">Gestão global e personalização da plataforma</p>
             </div>
           </header>
           
@@ -1940,7 +1940,7 @@ export default function Dashboard() {
                 </div>
                 <div style={{ flex: 1 }}>
                   <h3 style={{ fontSize: 16, fontWeight: 600 }}>Fonte de Dados</h3>
-                  <p style={{ fontSize: 13, color: 'var(--text2)' }}>Determine onde as informaÃ§Ãµes do sistema sÃ£o armazenadas e lidas.</p>
+                  <p style={{ fontSize: 13, color: 'var(--text2)' }}>Determine onde as informações do sistema são armazenadas e lidas.</p>
                 </div>
                 <div className="toggle-group" style={{ marginTop: 0, minWidth: 260 }}>
                   <button className={dbMode === 'local' ? 'active' : ''} onClick={() => setDbMode('local')}>
@@ -1953,8 +1953,8 @@ export default function Dashboard() {
               </div>
               <div style={{ fontSize: 12, padding: '10px 16px', background: 'var(--surface2)', borderRadius: 8, color: 'var(--text2)', border: '1px solid var(--border)' }}>
                 {dbMode === 'remote' 
-                  ? 'âœ“ Modo Nuvem ativo: SincronizaÃ§Ã£o em tempo real e persistÃªncia global habilitada.' 
-                  : 'âš  Modo Local ativo: Os dados serÃ£o salvos apenas no sistema de arquivos deste servidor local.'}
+                  ? 'âœ“ Modo Nuvem ativo: Sincronização em tempo real e persistência global habilitada.' 
+                  : 'âš  Modo Local ativo: Os dados serão salvos apenas no sistema de arquivos deste servidor local.'}
               </div>
             </div>
 
@@ -1966,7 +1966,7 @@ export default function Dashboard() {
                 </h3>
                 
                 <div style={{ marginBottom: 20 }}>
-                  <label className="field-label">InstituiÃ§Ã£o</label>
+                  <label className="field-label">Instituição</label>
                   <input className="input" placeholder="Ex: Universidade Aura" value={tempConfigs.institution || ''} onChange={e => setTempConfigs({...tempConfigs, institution: e.target.value})}/>
                 </div>
                 
@@ -1993,19 +1993,19 @@ export default function Dashboard() {
               {/* Tips & Extras Card */}
               <div className="card" style={{ padding: 24, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
                 <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Sparkles size={18} color="var(--accent)"/> InformaÃ§Ãµes Adicionais
+                  <Sparkles size={18} color="var(--accent)"/> Informações Adicionais
                 </h3>
                 <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6, marginBottom: 20 }}>
-                  As alteraÃ§Ãµes feitas aqui afetam como o sistema se apresenta para vocÃª e nos cabeÃ§alhos dos relatÃ³rios PDF gerados.
+                  As alterações feitas aqui afetam como o sistema se apresenta para você e nos cabeçalhos dos relatórios PDF gerados.
                 </p>
                 <div style={{ flex: 1, padding: 16, background: 'var(--surface2)', borderRadius: 12, border: '1px dashed var(--border)', fontSize: 12, color: 'var(--text2)' }}>
                   <p style={{ marginBottom: 8, fontWeight: 500, color: 'var(--text)' }}>Dica de Identidade:</p>
-                  Use cores com bom contraste para garantir a legibilidade dos menus e botÃµes principais.
+                  Use cores com bom contraste para garantir a legibilidade dos menus e botões principais.
                 </div>
                 
                 <div style={{ marginTop: 24 }}>
                   <button className="btn-primary" style={{ width: '100%', padding: '12px' }} onClick={() => saveSettings(tempConfigs)}>
-                    <Check size={18}/> Salvar Todas as PreferÃªncias
+                    <Check size={18}/> Salvar Todas as Preferências
                   </button>
                 </div>
               </div>
@@ -2026,7 +2026,7 @@ export default function Dashboard() {
           )}
           {selected.feedback && (
             <div className="feedback-box">
-              <p className="feedback-title"><Sparkles size={13}/> AnÃ¡lise AvalIA</p>
+              <p className="feedback-title"><Sparkles size={13}/> Análise AvalIA</p>
               <p className="feedback-text">{selected.feedback}</p>
             </div>
           )}
@@ -2041,10 +2041,10 @@ export default function Dashboard() {
       {showSubjectModal && (
         <div className="modal-overlay">
           <div className="modal">
-            <div className="modal-header"><h2>{editingSubject ? 'Editar MatÃ©ria' : 'Nova MatÃ©ria'}</h2><button className="btn-close" onClick={() => setShowSubjectModal(false)}>âœ•</button></div>
+            <div className="modal-header"><h2>{editingSubject ? 'Editar Matéria' : 'Nova Matéria'}</h2><button className="btn-close" onClick={() => setShowSubjectModal(false)}>âœ•</button></div>
             <label className="field-label">Nome da disciplina</label>
-            <input className="input" placeholder="Ex: CÃ¡lculo III" value={newSubData.name} onChange={e => setNewSubData({...newSubData, name: e.target.value})}/>
-            <label className="field-label">CÃ³digo</label>
+            <input className="input" placeholder="Ex: Cálculo III" value={newSubData.name} onChange={e => setNewSubData({...newSubData, name: e.target.value})}/>
+            <label className="field-label">Código</label>
             <input className="input" placeholder="Ex: MAT303" value={newSubData.code} onChange={e => setNewSubData({...newSubData, code: e.target.value})}/>
             {!editingSubject && <>
               <label className="field-label">Ementa (PDF)</label>
@@ -2058,7 +2058,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* â•â• MODAL: IMPORTAR EMENTA (para matÃ©ria existente) â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+      {/* â•â• MODAL: IMPORTAR EMENTA (para matéria existente) â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       {syllabusTarget && (
         <div className="modal-overlay">
           <div className="modal">
@@ -2066,7 +2066,7 @@ export default function Dashboard() {
               <h2>Importar Ementa</h2>
               <button className="btn-close" onClick={() => setSyllabusTarget(null)}>âœ•</button>
             </div>
-            <p style={{fontSize:13,color:'var(--text2)'}}>MatÃ©ria: <b style={{color:'var(--text)'}}>{syllabusTarget.name}</b></p>
+            <p style={{fontSize:13,color:'var(--text2)'}}>Matéria: <b style={{color:'var(--text)'}}>{syllabusTarget.name}</b></p>
             {syllabusChunks(syllabusTarget.syllabus ?? '').length > 0 && (
               <div>
                 <p style={{fontSize:11.5,color:'var(--text2)',marginBottom:6}}>Ementa atual ({syllabusChunks(syllabusTarget.syllabus ?? '').length} chunks):</p>
@@ -2114,17 +2114,17 @@ export default function Dashboard() {
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header"><h2>{editingActivity ? 'Editar Atividade' : 'Nova Atividade'}</h2><button className="btn-close" onClick={() => setShowActivityModal(false)}>âœ•</button></div>
-            <label className="field-label">MatÃ©ria</label>
+            <label className="field-label">Matéria</label>
             <select className="input" value={newActData.subjectId} onChange={e => setNewActData({...newActData, subjectId: e.target.value})}>
               <option value="">Selecioneâ€¦</option>
               {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
-            <label className="field-label">TÃ­tulo</label>
+            <label className="field-label">Título</label>
             <input className="input" value={newActData.title} onChange={e => setNewActData({...newActData, title: e.target.value})}/>
             <label className="field-label">Peso</label>
             <input className="input" type="number" step="0.1" value={newActData.weight} onChange={e => setNewActData({...newActData, weight: parseFloat(e.target.value)})}/>
-            <label className="field-label">CritÃ©rios IA</label>
-            <textarea className="textarea" placeholder="Descreva os critÃ©rios..." value={newActData.description} onChange={e => setNewActData({...newActData, description: e.target.value})}/>
+            <label className="field-label">Critérios IA</label>
+            <textarea className="textarea" placeholder="Descreva os critérios..." value={newActData.description} onChange={e => setNewActData({...newActData, description: e.target.value})}/>
             <div className="modal-actions">
               <button className="btn-ghost" onClick={() => setShowActivityModal(false)}>Cancelar</button>
               <button className="btn-primary" onClick={saveActivity}>Salvar</button>
@@ -2137,11 +2137,11 @@ export default function Dashboard() {
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header"><h2>{editingImpl ? 'Editar Ideia' : 'Nova Ideia'}</h2><button className="btn-close" onClick={() => setShowImplModal(false)}>âœ•</button></div>
-            <label className="field-label">TÃ­tulo</label>
+            <label className="field-label">Título</label>
             <input className="input" value={newImpl.title} onChange={e => setNewImpl({...newImpl, title: e.target.value})}/>
             <label className="field-label">Categoria</label>
             <input className="input" placeholder="Ex: UX, Bug, Funcionalidade" value={newImpl.category} onChange={e => setNewImpl({...newImpl, category: e.target.value})}/>
-            <label className="field-label">DescriÃ§Ã£o</label>
+            <label className="field-label">Descrição</label>
             <textarea className="textarea" placeholder="Descreva a ideia..." value={newImpl.description} onChange={e => setNewImpl({...newImpl, description: e.target.value})} onPaste={handleImplPaste}/>
             
             <label className="field-label">Imagem da Ideia (URL ou cole um print)</label>
@@ -2156,13 +2156,13 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
-            <p style={{fontSize:10,color:'var(--text2)',marginTop:4}}>Dica: VocÃª pode copiar um print (Ctrl+C) e colar (Ctrl+V) em qualquer campo acima.</p>
+            <p style={{fontSize:10,color:'var(--text2)',marginTop:4}}>Dica: Você pode copiar um print (Ctrl+C) e colar (Ctrl+V) em qualquer campo acima.</p>
 
             <label className="field-label">Prioridade</label>
             <select className="input" value={newImpl.priority} onChange={e => setNewImpl({...newImpl, priority: e.target.value})}>
-              <option value="alta">â–² Alta</option>
-              <option value="media">â—† MÃ©dia</option>
-              <option value="baixa">â–¼ Baixa</option>
+              <option value="alta">▲ Alta</option>
+              <option value="media">◆ Média</option>
+              <option value="baixa">▼ Baixa</option>
             </select>
             <div className="modal-actions">
               <button className="btn-ghost" onClick={() => setShowImplModal(false)}>Cancelar</button>
@@ -2181,7 +2181,7 @@ export default function Dashboard() {
               <button className="btn-close" onClick={() => setShowImportActModal(false)}>âœ•</button>
             </div>
             
-            <label className="field-label">1. Selecione a MatÃ©ria de destino</label>
+            <label className="field-label">1. Selecione a Matéria de destino</label>
             <select className="input" value={newActData.subjectId} onChange={e => {
               const sid = e.target.value;
               setNewActData({...newActData, subjectId: sid});
@@ -2219,7 +2219,7 @@ export default function Dashboard() {
 
             {parsedActs.length > 0 && (
               <div style={{marginTop:20}}>
-                <label className="field-label">3. Revise as atividades extraÃ­das ({parsedActs.length})</label>
+                <label className="field-label">3. Revise as atividades extraídas ({parsedActs.length})</label>
                 <div style={{maxHeight: 300, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8, padding: 12, background: 'var(--bg)'}}>
                   {parsedActs.map((act, idx) => (
                     <div key={idx} style={{marginBottom:12, paddingBottom:12, borderBottom: idx === parsedActs.length-1 ? 'none' : '1px solid var(--border)'}}>
@@ -2259,7 +2259,7 @@ export default function Dashboard() {
               <option value="">Selecioneâ€¦</option>
               {dbData.students.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
             </select>
-            <label className="field-label">MatÃ©ria</label>
+            <label className="field-label">Matéria</label>
             <select className="input" value={uploadSubject} onChange={e => setUploadSubject(e.target.value)}>
               <option value="">Selecioneâ€¦</option>
               {dbData.subjects.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
