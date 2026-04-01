@@ -148,6 +148,11 @@ export default function Dashboard() {
   const [batchSubjectId, setBatchSubjectId] = useState('');
   const [batchActivityId, setBatchActivityId] = useState('');
   const [batchStep, setBatchStep] = useState<'upload'|'validate'|'results'>('upload');
+  
+  // Activity Import from Text
+  const [showImportActModal, setShowImportActModal] = useState(false);
+  const [actImportText, setActImportText] = useState('');
+  const [parsedActs, setParsedActs] = useState<Partial<Activity>[]>([]);
 
   const [copySubjectId, setCopySubjectId] = useState('');
   const [copyActivityId, setCopyActivityId] = useState('');
@@ -235,11 +240,16 @@ export default function Dashboard() {
     catch (e: any) { alert('Erro: ' + e.message); }
   };
 
-  const deleteActivityCorrections = async (subjectName: string, activityName: string) => {
-    if (!confirm(`Deseja apagar TODAS as correções da atividade "${activityName}" na matéria "${subjectName}"? Esta ação é irreversível.`)) return;
+  const deleteActivityCorrections = async (subjectName: string, activityName?: string) => {
+    const msg = activityName 
+      ? `Deseja apagar TODAS as correções da atividade "${activityName}" na matéria "${subjectName}"? Esta ação é irreversível.`
+      : `Deseja apagar TODAS as correções de TODAS as atividades da matéria "${subjectName}"? Isso removerá ${dbData.submissions.filter(s => s.subject === subjectName).length} registros. Esta ação é irreversível.`;
+    
+    if (!confirm(msg)) return;
     setLoading(true);
     try {
       const subsToRemove = dbData.submissions.filter(s => s.subject === subjectName && (
+        !activityName || // If no activity, remove all for subject
         (s.feedback?.split('\n')[0]?.includes('Atividade:') && s.feedback.split('\n')[0].replace('Atividade:', '').trim() === activityName) ||
         (activityName === 'Geral' && !s.feedback?.split('\n')[0]?.includes('Atividade:'))
       ));
@@ -423,6 +433,49 @@ export default function Dashboard() {
       }
       setShowActivityModal(false); await fetchDB();
     } catch (e: any) { alert('Erro: ' + e.message); }
+  };
+
+  const parseActivitiesFromText = () => {
+    if (!actImportText.trim()) return;
+    
+    // Regex based on user pattern: • A.A 01 (Date): Title ... Instructions: ... Entrega: ...
+    const blocks = actImportText.split(/•\s*A\.A/i).filter(b => b.trim());
+    const results: Partial<Activity>[] = blocks.map(block => {
+      const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+      
+      // Extract title: it's on the first line after A.A (which was sliced)
+      // Example: " 01 (26/02/2026): Introdução ao Empreendedorismo"
+      const firstLine = lines[0];
+      const titleMatch = firstLine.match(/\s*\d+\s*(?:\([^)]*\))?:\s*(.*)/i) || firstLine.match(/\s*(\d+.*)/);
+      const title = titleMatch ? `A.A ${titleMatch[1]}` : `A.A ${firstLine}`;
+      
+      // Extract everything as description (the instructions)
+      // We look for key terms like "Instruções", "Leitura", etc.
+      const description = lines.slice(1).join('\n');
+      
+      return { title, description, weight: 1 };
+    });
+    
+    setParsedActs(results);
+  };
+
+  const importParsedActivities = async () => {
+    const selectedSubId = newActData.subjectId;
+    if (!selectedSubId) return alert('Selecione a matéria para a qual deseja importar as atividades.');
+    if (!parsedActs.length) return alert('Nenhuma atividade processada.');
+    
+    setLoading(true);
+    try {
+      for (const act of parsedActs) {
+        await apiPost('activity', { ...act, subjectId: selectedSubId });
+      }
+      alert(`${parsedActs.length} atividades importadas com sucesso!`);
+      setShowImportActModal(false);
+      setParsedActs([]);
+      setActImportText('');
+      await fetchDB();
+    } catch (e: any) { alert('Erro: ' + e.message); }
+    finally { setLoading(false); }
   };
 
   // ── IMPLEMENTATION ACTIONS ─────────────────────────────────────────────
@@ -639,68 +692,6 @@ export default function Dashboard() {
         </div>
       </aside>
 
-      {/* ══ SETTINGS ═══════════════════════════════════════════════════ */}
-      {view === 'settings' && <>
-        <header className="header">
-          <div><h1>Configurações</h1><p className="subtitle">Gestão global da plataforma</p></div>
-        </header>
-        <div className="table-wrap fade-in" style={{padding:24,maxWidth:800}}>
-          {/* DB Selection Card */}
-          <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 12, padding: 20, marginBottom: 28 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-              <Database size={20} color="var(--accent)"/>
-              <div style={{ flex: 1 }}>
-                <h3 style={{ fontSize: 14, fontWeight: 600 }}>Fonte de Dados</h3>
-                <p style={{ fontSize: 12, color: 'var(--text2)' }}>Determine onde as informações são lidas e gravadas.</p>
-              </div>
-              <div className="toggle-group" style={{ marginTop: 0, minWidth: 240 }}>
-                <button className={dbMode === 'local' ? 'active' : ''} onClick={() => setDbMode('local')}>
-                  📂 JSON Local
-                </button>
-                <button className={dbMode === 'remote' ? 'active' : ''} onClick={() => setDbMode('remote')}>
-                  ☁️ Supabase Cloud
-                </button>
-              </div>
-            </div>
-            <div style={{ fontSize: 11, padding: '8px 12px', background: 'var(--bg)', borderRadius: 6, color: 'var(--text2)' }}>
-              {dbMode === 'remote' 
-                ? '✓ Modo Nuvem ativo: Sincronização em tempo real habilitada.' 
-                : '⚠ Modo Local ativo: Dados salvos apenas neste servidor/máquina.'}
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
-            <div>
-              <label className="field-label">Instituição</label>
-              <input className="input" placeholder="Ex: Universidade Aura" value={tempConfigs.institution || ''} onChange={e => setTempConfigs({...tempConfigs, institution: e.target.value})}/>
-            </div>
-            <div>
-              <label className="field-label">Nome do Professor</label>
-              <input className="input" placeholder="Seu Nome completo" value={tempConfigs.professor || ''} onChange={e => setTempConfigs({...tempConfigs, professor: e.target.value})}/>
-            </div>
-          </div>
-          
-          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 20, marginBottom: 24 }}>
-            <div>
-              <label className="field-label">Nome do Sistema</label>
-              <input className="input" value={tempConfigs.system_name} onChange={e => setTempConfigs({...tempConfigs, system_name: e.target.value})}/>
-            </div>
-            <div>
-              <label className="field-label">Cor de Identidade</label>
-              <div style={{display:'flex',gap:12,alignItems:'center'}}>
-                <input type="color" className="input" style={{width:60,height:40,padding:4}} value={tempConfigs.primary_color} onChange={e => setTempConfigs({...tempConfigs, primary_color: e.target.value})}/>
-                <code style={{fontSize:11,color:'var(--text2)',fontFamily:'monospace'}}>{tempConfigs.primary_color.toUpperCase()}</code>
-              </div>
-            </div>
-          </div>
-          
-          <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: 20 }}>
-            <button className="btn-primary" style={{ padding: '10px 32px' }} onClick={() => saveSettings(tempConfigs)}>
-              <Check size={16}/> Salvar Todas as Preferências
-            </button>
-          </div>
-        </div>
-      </>}
 
       {/* ══ MAIN ══════════════════════════════════════════════════════ */}
       <main className="main">
@@ -765,7 +756,17 @@ export default function Dashboard() {
                     <h3 style={{fontSize:14, fontWeight:700, color:'var(--accent)', display:'flex', alignItems:'center', gap:8}}>
                       <BookOpen size={16}/> {subject.name}
                     </h3>
-                    <span className="badge" style={{fontSize:10}}>{subjectSubs.length} correções</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <span className="badge" style={{fontSize:10}}>{subjectSubs.length} correções</span>
+                      <button 
+                        className="btn-icon-danger" 
+                        style={{ padding: '2px 8px', height: 'auto', fontSize: 10, background: '#ef444415' }} 
+                        onClick={() => deleteActivityCorrections(subject.name)}
+                        title={`Apagar todas as correções de ${subject.name}`}
+                      >
+                        <Trash2 size={12}/> Limpar Matéria
+                      </button>
+                    </div>
                   </div>
                   
                   <div style={{padding:'10px 20px 20px'}}>
@@ -921,7 +922,10 @@ export default function Dashboard() {
         {view === 'activities' && <>
           <header className="header">
             <div><h1>Atividades</h1><p className="subtitle">{dbData.activities.length} avaliações</p></div>
-            <button className="btn-primary" onClick={() => openActivityModal()}><Plus size={16}/> Nova Atividade</button>
+            <div className="header-actions">
+              <button className="btn-ghost" onClick={() => setShowImportActModal(true)}><Sparkles size={16}/> Importar da Ementa</button>
+              <button className="btn-primary" onClick={() => openActivityModal()}><Plus size={16}/> Nova Atividade</button>
+            </div>
           </header>
           <div className="table-wrap fade-in">
             <table className="table">
@@ -1614,16 +1618,92 @@ export default function Dashboard() {
 
         {/* ══ SETTINGS ═══════════════════════════════════════════════════ */}
         {view === 'settings' && <>
-          <header className="header"><div><h1>Configurações do Sistema</h1><p className="subtitle">Personalize a identidade da sua plataforma</p></div></header>
-          <div className="table-wrap fade-in" style={{padding:24,maxWidth:600}}>
-            <label className="field-label">Nome do Sistema</label>
-            <input className="input" value={tempConfigs.system_name} onChange={e => setTempConfigs({...tempConfigs, system_name: e.target.value})}/>
-            <label className="field-label" style={{marginTop:16}}>Cor Primária (HEX)</label>
-            <div style={{display:'flex',gap:12}}>
-              <input className="input" type="color" style={{width:50,height:40,padding:2}} value={tempConfigs.primary_color} onChange={e => setTempConfigs({...tempConfigs, primary_color: e.target.value})}/>
-              <input className="input" placeholder="#6366f1" value={tempConfigs.primary_color} onChange={e => setTempConfigs({...tempConfigs, primary_color: e.target.value})}/>
+          <header className="header">
+            <div>
+              <h1>Configurações do Sistema</h1>
+              <p className="subtitle">Gestão global e personalização da plataforma</p>
             </div>
-            <button className="btn-primary" style={{marginTop:32,width:'100%'}} onClick={() => saveSettings()}>Salvar Configurações</button>
+          </header>
+          
+          <div className="fade-in" style={{ padding: '0 4px', maxWidth: 1000 }}>
+            {/* Database Selection Card */}
+            <div className="card" style={{ padding: 24, marginBottom: 24, border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+                <div style={{ background: 'var(--accent)20', padding: 12, borderRadius: 12 }}>
+                  <Database size={24} color="var(--accent)"/>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 600 }}>Fonte de Dados</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text2)' }}>Determine onde as informações do sistema são armazenadas e lidas.</p>
+                </div>
+                <div className="toggle-group" style={{ marginTop: 0, minWidth: 260 }}>
+                  <button className={dbMode === 'local' ? 'active' : ''} onClick={() => setDbMode('local')}>
+                    📂 JSON Local
+                  </button>
+                  <button className={dbMode === 'remote' ? 'active' : ''} onClick={() => setDbMode('remote')}>
+                    ☁️ Supabase Cloud
+                  </button>
+                </div>
+              </div>
+              <div style={{ fontSize: 12, padding: '10px 16px', background: 'var(--surface2)', borderRadius: 8, color: 'var(--text2)', border: '1px solid var(--border)' }}>
+                {dbMode === 'remote' 
+                  ? '✓ Modo Nuvem ativo: Sincronização em tempo real e persistência global habilitada.' 
+                  : '⚠ Modo Local ativo: Os dados serão salvos apenas no sistema de arquivos deste servidor local.'}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+              {/* Institution & Identity Card */}
+              <div className="card" style={{ padding: 24, border: '1px solid var(--border)' }}>
+                <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <GraduationCap size={18} color="var(--accent)"/> Identidade Institucional
+                </h3>
+                
+                <div style={{ marginBottom: 20 }}>
+                  <label className="field-label">Instituição</label>
+                  <input className="input" placeholder="Ex: Universidade Aura" value={tempConfigs.institution || ''} onChange={e => setTempConfigs({...tempConfigs, institution: e.target.value})}/>
+                </div>
+                
+                <div style={{ marginBottom: 20 }}>
+                  <label className="field-label">Nome do Professor</label>
+                  <input className="input" placeholder="Seu Nome completo" value={tempConfigs.professor || ''} onChange={e => setTempConfigs({...tempConfigs, professor: e.target.value})}/>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
+                  <div>
+                    <label className="field-label">Nome do Sistema</label>
+                    <input className="input" value={tempConfigs.system_name} onChange={e => setTempConfigs({...tempConfigs, system_name: e.target.value})}/>
+                  </div>
+                  <div>
+                    <label className="field-label">Cor Principal</label>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <input type="color" className="input" style={{ width: 44, height: 40, padding: 4 }} value={tempConfigs.primary_color} onChange={e => setTempConfigs({...tempConfigs, primary_color: e.target.value})}/>
+                      <code style={{ fontSize: 10, color: 'var(--text2)' }}>{tempConfigs.primary_color.toUpperCase()}</code>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tips & Extras Card */}
+              <div className="card" style={{ padding: 24, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
+                <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Sparkles size={18} color="var(--accent)"/> Informações Adicionais
+                </h3>
+                <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6, marginBottom: 20 }}>
+                  As alterações feitas aqui afetam como o sistema se apresenta para você e nos cabeçalhos dos relatórios PDF gerados.
+                </p>
+                <div style={{ flex: 1, padding: 16, background: 'var(--surface2)', borderRadius: 12, border: '1px dashed var(--border)', fontSize: 12, color: 'var(--text2)' }}>
+                  <p style={{ marginBottom: 8, fontWeight: 500, color: 'var(--text)' }}>Dica de Identidade:</p>
+                  Use cores com bom contraste para garantir a legibilidade dos menus e botões principais.
+                </div>
+                
+                <div style={{ marginTop: 24 }}>
+                  <button className="btn-primary" style={{ width: '100%', padding: '12px' }} onClick={() => saveSettings(tempConfigs)}>
+                    <Check size={18}/> Salvar Todas as Preferências
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </>}
       </main>
@@ -1782,6 +1862,83 @@ export default function Dashboard() {
               <button className="btn-ghost" onClick={() => setShowImplModal(false)}>Cancelar</button>
               <button className="btn-primary" onClick={saveImpl}>Salvar</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ MODAL: IMPORTAR ATIVIDADES DO TEXTO ══════════════════════════ */}
+      {showImportActModal && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: 800 }}>
+            <div className="modal-header">
+              <h2>Importar Atividades da Ementa</h2>
+              <button className="btn-close" onClick={() => setShowImportActModal(false)}>✕</button>
+            </div>
+            
+            <label className="field-label">1. Selecione a Matéria de destino</label>
+            <select className="input" value={newActData.subjectId} onChange={e => {
+              const sid = e.target.value;
+              setNewActData({...newActData, subjectId: sid});
+              // Auto-fill from syllabus if exists
+              const sub = dbData.subjects.find(s => s.id === sid);
+              if (sub?.syllabus) {
+                const chunks = syllabusChunks(sub.syllabus);
+                if (chunks.length > 0) {
+                  setActImportText(chunks.join('\n\n'));
+                  // We don't auto-parse to allow user to see text first
+                }
+              }
+            }}>
+              <option value="">Selecione…</option>
+              {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:16, marginBottom:8}}>
+               <label className="field-label" style={{margin:0}}>2. Texto da ementa (Contendo as A.A)</label>
+               {newActData.subjectId && dbData.subjects.find(s => s.id === newActData.subjectId)?.syllabus && (
+                 <span style={{fontSize:10, color:'#10b981', fontWeight:600}}>✓ Texto carregado automaticamente da ementa PDF</span>
+               )}
+            </div>
+            <textarea 
+              className="textarea" 
+              style={{height: 150, fontSize:12}} 
+              placeholder="Cole aqui o texto da ementa..." 
+              value={actImportText}
+              onChange={e => setActImportText(e.target.value)}
+            />
+            
+            <button className="btn-ghost" style={{marginTop:12, width:'100%'}} onClick={parseActivitiesFromText}>
+              <Sparkles size={14}/> Analisar Texto
+            </button>
+
+            {parsedActs.length > 0 && (
+              <div style={{marginTop:20}}>
+                <label className="field-label">3. Revise as atividades extraídas ({parsedActs.length})</label>
+                <div style={{maxHeight: 300, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8, padding: 12, background: 'var(--bg)'}}>
+                  {parsedActs.map((act, idx) => (
+                    <div key={idx} style={{marginBottom:12, paddingBottom:12, borderBottom: idx === parsedActs.length-1 ? 'none' : '1px solid var(--border)'}}>
+                      <div style={{display:'flex', gap:8, marginBottom:4}}>
+                        <input className="input" style={{flex:1, fontWeight:600}} value={act.title} onChange={e => {
+                          const next = [...parsedActs];
+                          next[idx].title = e.target.value;
+                          setParsedActs(next);
+                        }}/>
+                        <button className="btn-icon-danger" onClick={() => setParsedActs(parsedActs.filter((_,i) => i !== idx))}><Trash2 size={12}/></button>
+                      </div>
+                      <textarea className="textarea" style={{height: 80, fontSize:11}} value={act.description} onChange={e => {
+                        const next = [...parsedActs];
+                        next[idx].description = e.target.value;
+                        setParsedActs(next);
+                      }}/>
+                    </div>
+                  ))}
+                </div>
+                <div className="modal-actions" style={{marginTop:20}}>
+                  <button className="btn-ghost" onClick={() => { setParsedActs([]); setActImportText(''); }}>Limpar</button>
+                  <button className="btn-primary" onClick={importParsedActivities}>Importar {parsedActs.length} Atividades</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
