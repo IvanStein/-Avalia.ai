@@ -1267,8 +1267,8 @@ export default function Dashboard() {
             </div>
           </header>
           <div className="table-wrap fade-in">
-            <table className="table">
-              <thead><tr><th>Título</th><th>Matéria</th><th>Peso</th><th>Critério IA</th><th></th></tr></thead>
+            <table className="table" style={{tableLayout:'fixed'}}>
+              <thead><tr><th style={{width:'35%'}}>Título</th><th style={{width:'25%'}}>Matéria</th><th style={{width:'8%'}}>Peso</th><th style={{width:'25%'}}>Critério IA</th><th style={{width:'7%', textAlign:'right'}}></th></tr></thead>
               <tbody>
                 {dbData.activities.length === 0
                   ? <tr><td colSpan={5}><div className="empty-state"><Clock size={40}/><p>Nenhuma atividade.</p></div></td></tr>
