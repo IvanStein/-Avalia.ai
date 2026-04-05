@@ -803,8 +803,8 @@ export default function Dashboard() {
         setBatchReport(prev => prev ? { succeeded: prev.succeeded + 1, failed: Math.max(0, prev.failed - 1) } : null);
       }
       await fetchDB();
-    } catch (e: any) {
-      setBatchEntries(prev => prev.map(e => e.id === entryId ? { ...e, status: 'error', error: e.message } : e));
+    } catch (catchErr: any) {
+      setBatchEntries(prev => prev.map(e => e.id === entryId ? { ...e, status: 'error', error: catchErr.message } : e));
     } finally {
       setBatchRunning(false);
     }

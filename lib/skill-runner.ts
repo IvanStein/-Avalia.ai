@@ -32,16 +32,16 @@ ${p.student_text}
 
 ## 3. Instruções de Correção:
 - Avalie de 0 a 10 com uma casa decimal baseando-se no Contexto Pedagógico.
-- Escreva EXATAMENTE 1 parágrafo denso e fluido. 
-- HUMANIZAÇÃO: Jamais mencione o nome do aluno em qualquer parte do feedback. Comece de forma direta, sem cumprimentos nominais (ex: "Notei que você focou em...", "Sua análise demonstra...", "O ponto central do seu texto...").
-- TOM DE VOZ: Não use frases robóticas como "Este trabalho demonstra" ou "A análise apresenta". Use uma linguagem de professor: "Notei que você focou em...", "Senti falta de um maior detalhamento em...", "O ponto que você trouxe sobre... é muito pertinente".
-- ESTRUTURA: Integre em um único texto: resumo do que foi entregue + pontos fortes + pontos que precisam de atenção para o crescimento do aluno.
-- Seja o mais específico possível sobre o conteúdo do aluno para que ele sinta que você realmente leu o trabalho.
+- Escreva EXATAMENTE 1 parágrafo CURTO, DIRETO e fluido (máximo 4-5 linhas). 
+- HUMANIZAÇÃO: Jamais mencione o nome do aluno em qualquer parte do feedback. Comece de forma direta, sem cumprimentos nominais.
+- TOM DE VOZ: Não use frases robóticas. Use uma linguagem de professor experiente.
+- ESTRUTURA: Integre em um parágrafo ÚNICO e suscinto: resumo do que foi entregue + pontos fortes + melhorias.
+- Seja o mais específico possível sobre o conteúdo do aluno em poucas palavras.
 
 Responda SOMENTE em JSON:
 {
   "grade": <0.0 a 10.0>,
-  "feedback": "<1 parágrafo unificado com resumo + pontos fortes + melhorias>",
+  "feedback": "<1 parágrafo ÚNICO, denso e suscinto>",
   "criteria_scores": {
     "clareza": <0-10>,
     "profundidade": <0-10>,
@@ -208,10 +208,10 @@ ${JSON.stringify(p.students_works)}
 ## 3. Instruções de Correção
 Para CADA aluno, analise o trabalho com base no Contexto Pedagógico.
 - Dê uma nota final (0.0 a 10.0).
-- Escreva EXATAMENTE 1 parágrafo denso e humano.
+- Escreva EXATAMENTE 1 parágrafo CURTO, DIRETO e humano (máximo 4-5 linhas).
 - ADOTE SUA PERSONA: Você é o professor. Dirija-se ao aluno pelo nome (contido no JSON).
-- EVITE ROBOTISMO: Não use estruturas fixas ou impessoais. Varie o início das frases. Use termos como "Percebi que você...", "Excelente escolha de referências...", "Arthur, sua análise sobre...".
-- CONTEÚDO: O parágrafo deve conter um breve resumo do entregável, elogios aos pontos fortes e orientações claras sobre o que pode ser melhorado pedagógicamente.
+- EVITE ROBOTISMO: Não use estruturas fixas ou impessoais. Varie o início das frases.
+- CONTEÚDO: O parágrafo deve conter um resumo suscinto do entregável, elogios aos pontos fortes e orientações claras de melhoria.
 
 Retorne SOMENTE um JSON válido com a seguinte estrutura:
 {
@@ -219,7 +219,7 @@ Retorne SOMENTE um JSON válido com a seguinte estrutura:
     {
       "student_name": "Nome do Aluno",
       "grade": <Nota de 0.0 a 10.0>,
-      "feedback": "<1 parágrafo unificado contendo o resumo + pontos fortes + melhorias>"
+      "feedback": "<1 parágrafo ÚNICO e suscinto contendo resumo + pontos fortes + melhorias>"
     }
   ]
 }

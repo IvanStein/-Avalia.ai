@@ -51,7 +51,8 @@ async function initPostgres() {
       await sql`CREATE TABLE IF NOT EXISTS implementacoes (id TEXT PRIMARY KEY, title TEXT, description TEXT, status TEXT, priority TEXT, created_at TEXT, category TEXT, image_url TEXT)`;
       try { await sql`ALTER TABLE implementacoes ADD COLUMN category TEXT`; } catch(e){}
       try { await sql`ALTER TABLE implementacoes ADD COLUMN image_url TEXT`; } catch(e){}
-      await sql`CREATE TABLE IF NOT EXISTS submissions (id TEXT PRIMARY KEY, student_name TEXT, subject TEXT, status TEXT, grade FLOAT, feedback TEXT, source TEXT, submitted_at TEXT)`;
+      await sql`CREATE TABLE IF NOT EXISTS submissions (id TEXT PRIMARY KEY, student_name TEXT, subject TEXT, status TEXT, grade FLOAT, feedback TEXT, source TEXT, submitted_at TEXT, audit_notes TEXT)`;
+      try { await sql`ALTER TABLE submissions ADD COLUMN audit_notes TEXT`; } catch(e){}
       await sql`CREATE TABLE IF NOT EXISTS configs (id TEXT PRIMARY KEY, data TEXT)`;
       await sql`CREATE TABLE IF NOT EXISTS error_logs (id TEXT PRIMARY KEY, message TEXT, details TEXT, mode TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`;
       
@@ -342,6 +343,32 @@ export const db = {
     const data = readDB();
     data.submissions = data.submissions.filter((s: any) => s.id !== id);
     saveDB(data); return { id };
+  },
+  updateSubmission: async (id: string, updates: any, mode: 'local' | 'remote' = 'local') => {
+    if (mode === 'remote') {
+      const { status, auditNotes, feedback, grade } = updates;
+      // Convert to snake_case for Postgres if needed, but the current schema uses student_name, submitted_at.
+      // Wait, let's check schema again.
+      // status, grade, feedback are columns.
+      // auditNotes is NOT in schema!
+      await sql`UPDATE submissions SET 
+                status = COALESCE(${status || null}, status),
+                grade = COALESCE(${grade || null}, grade),
+                feedback = COALESCE(${feedback || null}, feedback),
+                audit_notes = COALESCE(${auditNotes || null}, audit_notes)
+                WHERE id = ${id}`;
+      return { id, ...updates };
+    }
+    const data = readDB();
+    const sub = data.submissions.find((s: any) => s.id === id);
+    if (sub) {
+      if (updates.status !== undefined) sub.status = updates.status;
+      if (updates.auditNotes !== undefined) sub.auditNotes = updates.auditNotes;
+      if (updates.grade !== undefined) sub.grade = updates.grade;
+      if (updates.feedback !== undefined) sub.feedback = updates.feedback;
+    }
+    saveDB(data);
+    return sub || { id, ...updates };
   },
 
   // ── CONFIGS ─────────────────────────────────────────────────────────────

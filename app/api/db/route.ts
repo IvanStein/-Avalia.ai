@@ -79,6 +79,9 @@ export async function POST(req: NextRequest) {
       case 'submission':
         result = await db.addSubmission(data, mode);
         break;
+      case 'submission-update':
+        result = await db.updateSubmission(data.id, data, mode);
+        break;
       case 'configs':
         result = await db.saveConfigs(data, mode);
         break;
