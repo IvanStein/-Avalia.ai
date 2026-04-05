@@ -196,20 +196,25 @@ export default function Dashboard() {
     if (!reportSubjectId) return null;
     if (reportType === 'activity' && !reportActivityId) return null;
     const sub = dbData.subjects.find(s => s.id === reportSubjectId);
+    
+    let head: string[] = [];
+    let body: any[] = [];
+    let acts: Activity[] = [];
+    let act: Activity | undefined;
+
     if (reportType === 'subject') {
       const allActs = dbData.activities.filter(a => a.subjectId === reportSubjectId);
-      // Filter: Only show activities with at least one evaluation
-      const acts = allActs.filter(a => dbData.submissions.some(subm => 
+      acts = allActs.filter(a => dbData.submissions.some(subm => 
         subm.subject === sub?.name && subm.status === 'graded' &&
         (getActName(subm.feedback || '') === a.title)
       ));
 
-      const head = ['Aluno', ...acts.flatMap(a => {
-          const short = a.title.split('-')[0].trim();
+      head = ['Aluno', ...acts.flatMap(a => {
+          const short = (a.title || '').split('-')[0].trim();
           return [`${short}`, `Faltas`];
       }), 'Média', 'Total Faltas'];
 
-      const body = dbData.students
+      body = dbData.students
         .filter(s => (s.subjectIds || []).includes(reportSubjectId))
         .sort((a,b) => a.name.localeCompare(b.name))
         .map(stu => {
@@ -221,7 +226,7 @@ export default function Dashboard() {
               (getActName(subm.feedback || '') === a.title)
             );
             if (submission) {
-              row.push(submission.grade?.toFixed(1) || '0.0'); row.push('0');
+              row.push((submission.grade || 0).toFixed(1)); row.push('0');
               totalGrade += submission.grade || 0;
             } else {
               row.push('0.0'); row.push('2');
@@ -232,26 +237,41 @@ export default function Dashboard() {
           row.push(totalAbsences.toString());
           return row;
         });
-      return { head, body, title: sub?.name, isMatrix: true };
     } else {
-      const act = dbData.activities.find(a => a.id === reportActivityId);
-      const head = ['Aluno', 'Nota', 'Faltas', 'Feedback'];
-      const body = dbData.students
+      act = dbData.activities.find(a => a.id === reportActivityId);
+      head = ['Aluno', 'Nota', 'Faltas', 'Feedback'];
+      body = dbData.students
         .filter(s => (s.subjectIds || []).includes(reportSubjectId))
-        .sort((a,b) => a.name.localeCompare(b.name))
+        .sort((a,b) => (a.name || '').localeCompare(b.name || ''))
         .map(stu => {
           const submission = dbData.submissions.find(subm => 
             subm.studentName === stu.name && subm.subject === sub?.name && subm.status === 'graded' &&
             (getActName(subm.feedback || '') === act?.title)
           );
           if (submission) {
-            return [stu.name, submission.grade?.toFixed(1) || '0.0', '0', submission.feedback || 'Sem feedback'];
+            return [stu.name, (submission.grade || 0).toFixed(1), '0', submission.feedback || 'Sem feedback'];
           }
           return [stu.name, '0.0', '2', 'Não entregou / Ausente'];
         });
-      return { head, body, title: `${sub?.name} - ${act?.title}`, isMatrix: false };
     }
-  }, [reportSubjectId, reportType, reportActivityId, dbData]);
+
+    const gradedSubmissions = dbData.submissions.filter(subm => 
+      subm.subject === sub?.name && subm.status === 'graded' &&
+      (reportType === 'activity' ? getActName(subm.feedback || '') === act?.title : true)
+    );
+    
+    const stats = {
+      totalGraded: gradedSubmissions.length,
+      classAvg: gradedSubmissions.length > 0 
+        ? (gradedSubmissions.reduce((acc, curr) => acc + (curr.grade || 0), 0) / gradedSubmissions.length).toFixed(1)
+        : '0.0',
+      participation: dbData.students.filter(s => (s.subjectIds || []).includes(reportSubjectId)).length > 0
+        ? ((new Set(gradedSubmissions.map(gs => gs.studentName)).size / dbData.students.filter(s => (s.subjectIds || []).includes(reportSubjectId)).length) * 100).toFixed(0)
+        : '0'
+    };
+
+    return { head, body, title: reportType === 'subject' ? sub?.name : `${sub?.name} - ${act?.title}`, isMatrix: reportType === 'subject', stats };
+  }, [reportSubjectId, reportType, reportActivityId, dbData.subjects, dbData.activities, dbData.submissions, dbData.students]);
 
   const fetchDB = useCallback(async () => {
     setLoading(true);
@@ -1682,32 +1702,59 @@ export default function Dashboard() {
                         {reportPreviewData.title} • {reportPreviewData.body.length} alunos identificados
                       </p>
                     </div>
-                    <button className="btn-primary" style={{ padding: '10px 24px' }} onClick={async () => {
-                      const { jsPDF } = await import('jspdf');
-                      const autoTable = (await import('jspdf-autotable')).default;
-                      const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
-                      
-                      doc.setFontSize(18);
-                      doc.text(dbData.configs.institution || 'Aura AI - Relatório', 14, 20);
-                      doc.setFontSize(11);
-                      doc.setTextColor(100);
-                      doc.text(`Professor: ${dbData.configs.professor || 'Não informado'}`, 14, 28);
-                      doc.text(`Matéria: ${reportPreviewData.title}`, 14, 34);
-                      doc.text(`Data: ${new Date().toLocaleDateString()}`, doc.internal.pageSize.width - 60, 20);
+                    <div style={{ display: 'flex', gap: 12 }}>
+                      <button className="btn-ghost" onClick={() => { setView('batch'); setBatchSubjectId(reportSubjectId); }}>
+                        <Layers size={14}/> Ir para Correção
+                      </button>
+                      <button className="btn-primary" style={{ padding: '10px 24px' }} onClick={async () => {
+                        const { jsPDF } = await import('jspdf');
+                        const autoTable = (await import('jspdf-autotable')).default;
+                        const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+                        
+                        doc.setFontSize(18);
+                        doc.text(dbData.configs.institution || 'Aura AI - Relatório', 14, 20);
+                        doc.setFontSize(11);
+                        doc.setTextColor(100);
+                        doc.text(`Professor: ${dbData.configs.professor || 'Não informado'}`, 14, 28);
+                        doc.text(`Matéria: ${reportPreviewData.title}`, 14, 34);
+                        doc.text(`Data: ${new Date().toLocaleDateString()}`, doc.internal.pageSize.width - 60, 20);
 
-                      autoTable(doc, {
-                        head: [reportPreviewData.head],
-                        body: reportPreviewData.body,
-                        startY: 45,
-                        theme: 'grid',
-                        styles: { fontSize: reportPreviewData.isMatrix ? 7 : 9, cellPadding: 2 },
-                        headStyles: { fillColor: [99, 102, 241], textColor: 255 },
-                        columnStyles: !reportPreviewData.isMatrix ? { 3: { cellWidth: 100 } } : undefined
-                      });
-                      doc.save(`Relatorio_${reportPreviewData.title.replace(/\s+/g, '_')}.pdf`);
-                    }}>
-                      <BarChart2 size={16}/> Gerar PDF Final
-                    </button>
+                        autoTable(doc, {
+                          head: [reportPreviewData.head],
+                          body: reportPreviewData.body,
+                          startY: 45,
+                          theme: 'grid',
+                          styles: { fontSize: reportPreviewData.isMatrix ? 7 : 9, cellPadding: 2 },
+                          headStyles: { fillColor: [99, 102, 241], textColor: 255 },
+                          columnStyles: !reportPreviewData.isMatrix ? { 3: { cellWidth: 100 } } : undefined
+                        });
+                        doc.save(`Relatorio_${reportPreviewData.title.replace(/\s+/g, '_')}.pdf`);
+                      }}>
+                        <BarChart2 size={16}/> Gerar PDF Final
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Summary Bar */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+                    <div className="card" style={{ padding: '14px 18px', background: 'var(--surface2)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span style={{ fontSize: 9, textTransform: 'uppercase', color: 'var(--text2)', fontWeight: 600, letterSpacing: '0.05em' }}>Atividades Corrigidas</span>
+                      <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--accent2)' }}>{reportPreviewData.stats.totalGraded}</span>
+                    </div>
+                    <div className="card" style={{ padding: '14px 18px', background: 'var(--surface2)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span style={{ fontSize: 9, textTransform: 'uppercase', color: 'var(--text2)', fontWeight: 600, letterSpacing: '0.05em' }}>Média Geral da Turma</span>
+                      <span style={{ fontSize: 20, fontWeight: 700, color: parseFloat(reportPreviewData.stats.classAvg) >= 7 ? 'var(--blue)' : 'var(--red)' }}>{reportPreviewData.stats.classAvg}</span>
+                    </div>
+                    <div className="card" style={{ padding: '14px 18px', background: 'var(--surface2)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span style={{ fontSize: 9, textTransform: 'uppercase', color: 'var(--text2)', fontWeight: 600, letterSpacing: '0.05em' }}>Taxa de Entrega</span>
+                      <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--green)' }}>{reportPreviewData.stats.participation}%</span>
+                    </div>
+                    <div className="card" style={{ padding: '14px 18px', background: 'var(--surface2)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span style={{ fontSize: 9, textTransform: 'uppercase', color: 'var(--text2)', fontWeight: 600, letterSpacing: '0.05em' }}>Alunos Ativos</span>
+                      <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)' }}>
+                        {dbData.students.filter(s => (s.subjectIds || []).includes(reportSubjectId)).length}
+                      </span>
+                    </div>
                   </div>
                   
                   <div className="table-wrap" style={{ maxHeight: 500, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 12 }}>
@@ -1737,7 +1784,7 @@ export default function Dashboard() {
                               let customColor = (j === 0 ? 'var(--text1)' : 'var(--text2)');
                               if (isAnyGradeCol) {
                                 const val = parseFloat(cell);
-                                customColor = val > 7 ? '#3b82f6' : '#ef4444';
+                                customColor = val >= 7 ? 'var(--blue)' : 'var(--red)';
                               }
 
                               return (
@@ -1815,7 +1862,7 @@ export default function Dashboard() {
                 <div style={{ display: 'flex', gap: 16 }}>
                   <div className="student-stat-card">
                     <span style={{ fontSize: 10, textTransform: 'uppercase', color: 'var(--text2)' }}>Média Geral</span>
-                    <span style={{ fontSize: 28, fontWeight: 700, color: parseFloat(avg) > 7 ? '#3b82f6' : '#ef4444' }}>{avg}</span>
+                    <span style={{ fontSize: 28, fontWeight: 700, color: parseFloat(avg) >= 7 ? 'var(--blue)' : 'var(--red)' }}>{avg}</span>
                   </div>
                   <div className="student-stat-card">
                     <span style={{ fontSize: 10, textTransform: 'uppercase', color: 'var(--text2)' }}>Total Faltas</span>
@@ -1846,7 +1893,7 @@ export default function Dashboard() {
                           </p>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: 20, fontWeight: 700, color: (sub.grade || 0) > 7 ? '#3b82f6' : '#ef4444' }}>
+                          <div style={{ fontSize: 20, fontWeight: 700, color: (sub.grade || 0) >= 7 ? 'var(--blue)' : 'var(--red)' }}>
                             {sub.grade?.toFixed(1)}
                           </div>
                           <span style={{ fontSize: 10, color: 'var(--text2)' }}>Nota</span>
