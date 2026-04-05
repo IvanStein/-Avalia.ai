@@ -783,7 +783,7 @@ export default function Dashboard() {
           </h2>
           
           <div className="fade-in" style={{display:'flex', flexDirection:'column', gap:28}}>
-            {dbData.subjects.filter(sub => dbData.submissions.some(s => s.subject === sub.name)).sort((a,b) => a.name.localeCompare(b.name)).map(subject => {{dbData.subjects.filter(sub => dbData.submissions.some(s => s.subject === sub.name)).sort((a,b) => a.name.localeCompare(b.name)).map(subject => {
+            {dbData.subjects.filter(sub => dbData.submissions.some(s => s.subject === sub.name)).sort((a,b) => a.name.localeCompare(b.name)).map(subject => {
               const subjectSubs = dbData.submissions.filter(s => s.subject === subject.name);
               const isSubExpanded = !!expandedSubjects[subject.id];
               
@@ -885,7 +885,6 @@ export default function Dashboard() {
                   )}
                 </div>
               );
-            })}
             })}
             
             {dbData.submissions.length === 0 && (
