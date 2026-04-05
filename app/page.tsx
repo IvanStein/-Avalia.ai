@@ -123,7 +123,7 @@ function syllabusChunks(raw: string): string[] {
 
 // â”€â”€ COMPONENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function Dashboard() {
-  type View = 'dashboard'|'subjects'|'students'|'enrollment'|'activities'|'batch'|'implementacoes'|'settings'|'copy'|'reports'|'student-profile';
+  type View = 'dashboard'|'subjects'|'students'|'enrollment'|'activities'|'batch'|'implementacoes'|'settings'|'copy'|'reports'|'student-profile'|'manual';
   const [view, setView] = useState<View>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
@@ -861,6 +861,7 @@ export default function Dashboard() {
           <NavItem v="activities"     icon={Clock}       label="Atividades"/>
           <p className="nav-label">Trabalho</p>
           <NavItem v="batch"          icon={Layers}      label="Correção"/>
+          <NavItem v="manual"         icon={Edit2}       label="Lançamento Manual"/>
           <NavItem v="copy"           icon={Layers}      label="Copia de Atividades"/>
           <NavItem v="reports"        icon={BarChart2}   label="Relatórios"/>
           <p className="nav-label">Sistema</p>
@@ -1533,6 +1534,103 @@ export default function Dashboard() {
             )}
           </div>
         )}
+
+        {/* ── LANÇAMENTO MANUAL ──────────────────────────────────────────────────────── */}
+        {view === 'manual' && (() => {
+          const [selStu, setSelStu] = useState('');
+          const [selSub, setSelSub] = useState('');
+          const [selAct, setSelAct] = useState('');
+          const [selGrade, setSelGrade] = useState('0.0');
+          const [selFeed, setSelFeed] = useState('');
+          const [saving, setSaving] = useState(false);
+
+          const handleManualSave = async () => {
+            if (!selStu || !selSub) return alert('Selecione aluno e matéria');
+            setSaving(true);
+            try {
+              const stu = dbData.students.find(s => s.id === selStu);
+              const sub = dbData.subjects.find(s => s.id === selSub);
+              const act = dbData.activities.find(a => a.id === selAct);
+              if (!stu || !sub) throw new Error('Dados inválidos');
+
+              const activityPrefix = act ? `Atividade: ${act.title}\n` : '';
+              await apiPost('submissions', {
+                studentName: stu.name,
+                subject: sub.name,
+                status: "graded",
+                grade: parseFloat(selGrade),
+                feedback: activityPrefix + selFeed,
+                source: "pdf", 
+                submittedAt: new Date().toISOString().split("T")[0],
+              });
+              alert('Nota lançada com sucesso!');
+              setSelGrade('0.0'); setSelFeed('');
+              fetchDB();
+              setView('dashboard');
+            } catch (e:any) { alert(e.message); }
+            setSaving(false);
+          };
+
+          return (
+            <div className="fade-in">
+              <header className="header">
+                <div><h1>Lançamento Manual</h1><p className="subtitle">Ajuste de notas e correções avulsas</p></div>
+              </header>
+
+              <div className="card" style={{ padding: 40, maxWidth: 900, margin: '20px auto' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
+                  <div>
+                    <label className="field-label">Aluno</label>
+                    <select className="input" value={selStu} onChange={e => setSelStu(e.target.value)} style={{height: 48}}>
+                      <option value="">Selecione o Aluno...</option>
+                      {dbData.students.sort((a,b) => a.name.localeCompare(b.name)).map(s => (
+                        <option key={s.id} value={s.id}>{s.name} {s.ra ? `(${s.ra})` : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="field-label">Matéria</label>
+                    <select className="input" value={selSub} onChange={e => { setSelSub(e.target.value); setSelAct(''); }} style={{height: 48}}>
+                      <option value="">Selecione a Matéria...</option>
+                      {dbData.subjects.sort((a,b) => a.name.localeCompare(b.name)).map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 24 }}>
+                  <label className="field-label">Atividade Correspondente (Opcional)</label>
+                  <select className="input" value={selAct} onChange={e => setSelAct(e.target.value)} disabled={!selSub} style={{height: 48}}>
+                    <option value="">-- Avaliação Geral / Sem Vínculo Específico --</option>
+                    {dbData.activities.filter(a => a.subjectId === selSub).map(a => (
+                      <option key={a.id} value={a.id}>{a.title}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: 32, marginBottom: 32 }}>
+                  <div>
+                    <label className="field-label">Nota Final</label>
+                    <input type="number" step="0.1" min="0" max="10" className="input" value={selGrade} onChange={e => setSelGrade(e.target.value)} style={{ fontSize: 24, fontWeight: 800, textAlign: 'center', height: 60, color: parseFloat(selGrade) >= 7 ? 'var(--blue)' : 'var(--red)' }} />
+                  </div>
+                  <div>
+                    <label className="field-label">Feedback ou Observações do Professor</label>
+                    <textarea className="input" rows={6} placeholder="Utilize este espaço para registrar considerações pedagógicas, justificativas de ajuste ou observações sobre a entrega..." value={selFeed} onChange={e => setSelFeed(e.target.value)} style={{padding: 16}} />
+                  </div>
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 32, display: 'flex', justifyContent: 'flex-end', gap: 16 }}>
+                  <button className="btn-ghost" style={{padding: '0 24px'}} onClick={() => setView('dashboard')}>Cancelar</button>
+                  <button className="btn-primary" style={{ padding: '0 40px', height: 48 }} disabled={saving} onClick={handleManualSave}>
+                    {saving ? <RefreshCw className="spin" size={18}/> : <Check size={18}/>}
+                    Confirmar Lançamento
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
 
         {/* â•â• LANÇAMENTO (COPIA E COLA) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         {/* ── COPIA DE ATIVIDADES ─────────────────────────────────────────────────── */}
