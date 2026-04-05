@@ -1,7 +1,7 @@
-# AvalIA — Skills do Projeto
+# Aval.IA — Skills do Projeto
 
 ## Visão Geral
-Skills são módulos de capacidade do sistema AvalIA. Cada skill define como o sistema
+Skills são módulos de capacidade do sistema Aval.IA. Cada skill define como o sistema
 deve se comportar em uma tarefa específica, com prompt base, parâmetros e exemplos.
 
 ---

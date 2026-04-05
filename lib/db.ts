@@ -34,7 +34,7 @@ const INITIAL_DB: any = {
   activities:      [{ id: 'a1', subjectId: '1', title: 'P1 - Derivadas', weight: 1, description: '' }],
   implementacoes:  [],
   submissions:     [],
-  configs:         { system_name: 'Avalia.ai', primary_color: '#6366f1' },
+  configs:         { system_name: 'Aval.IA', primary_color: '#6366f1' },
   batch_state:     null,
 };
 

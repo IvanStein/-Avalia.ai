@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(newSubmission);
 
   } catch (error: any) {
-    console.error("Erro na avaliação AvalIA:", error);
+    console.error("Erro na avaliação Aval.IA:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

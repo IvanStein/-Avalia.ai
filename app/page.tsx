@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Upload, BookOpen, CheckCircle, Clock, GraduationCap, Sparkles,
   Database, UserPlus, Plus, Trash2, AlertCircle, Layers, X,
-  BarChart2, Users, Lightbulb, FileText, ChevronRight, Edit2,
+  BarChart2, Users, Lightbulb, FileText, ChevronRight, ChevronDown, Edit2,
   ArrowRight, Check, RefreshCw, Copy, Hash
 } from "lucide-react";
 
@@ -62,7 +62,7 @@ const PRIORITY_CONFIG: Record<string, { label: string; cls: string }> = {
 
 const EMPTY_DB: DBData = { 
   subjects: [], students: [], activities: [], implementacoes: [], submissions: [], 
-  configs: { system_name: 'Avalia.ai', primary_color: '#6366f1', theme: 'dark' } 
+  configs: { system_name: 'Aval.IA', primary_color: '#6366f1', theme: 'dark' } 
 };
 
 // â”€â”€ HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -166,6 +166,8 @@ export default function Dashboard() {
   const [reportType, setReportType] = useState<'activity'|'subject'>('subject');
   const [reportSubjectId, setReportSubjectId] = useState('');
   const [reportActivityId, setReportActivityId] = useState('');
+  const [expandedSubjects, setExpandedSubjects] = useState<Record<string, boolean>>({});
+  const [expandedActivities, setExpandedActivities] = useState<Record<string, boolean>>({});
 
   const fetchDB = useCallback(async () => {
     setLoading(true);
@@ -702,7 +704,7 @@ export default function Dashboard() {
     <div className="app">
       {/* â”€â”€ SIDEBAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <aside className="sidebar">
-        <div className="logo"><GraduationCap size={26} strokeWidth={1.5}/><span>AvalIA</span></div>
+        <div className="logo"><GraduationCap size={26} strokeWidth={1.5}/><span>Aval.IA</span></div>
         <nav className="nav">
           <p className="nav-label">Visão Geral</p>
           <NavItem v="dashboard"      icon={BookOpen}    label="Dashboard"/>
@@ -781,8 +783,9 @@ export default function Dashboard() {
           </h2>
           
           <div className="fade-in" style={{display:'flex', flexDirection:'column', gap:28}}>
-            {dbData.subjects.filter(sub => dbData.submissions.some(s => s.subject === sub.name)).sort((a,b) => a.name.localeCompare(b.name)).map(subject => {
+            {dbData.subjects.filter(sub => dbData.submissions.some(s => s.subject === sub.name)).sort((a,b) => a.name.localeCompare(b.name)).map(subject => {{dbData.subjects.filter(sub => dbData.submissions.some(s => s.subject === sub.name)).sort((a,b) => a.name.localeCompare(b.name)).map(subject => {
               const subjectSubs = dbData.submissions.filter(s => s.subject === subject.name);
+              const isSubExpanded = !!expandedSubjects[subject.id];
               
               // Group submissions of this subject by activity
               const activityGroups = subjectSubs.reduce((acc, sub) => {
@@ -796,8 +799,12 @@ export default function Dashboard() {
 
               return (
                 <div key={subject.id} className="card" style={{padding:0, overflow:'hidden', border:'1px solid var(--border)'}}>
-                  <div style={{background:'var(--surface2)', padding:'12px 20px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                  <div 
+                    style={{background:'var(--surface2)', padding:'12px 20px', borderBottom: isSubExpanded ? '1px solid var(--border)' : 'none', display:'flex', justifyContent:'space-between', alignItems:'center', cursor:'pointer'}}
+                    onClick={() => setExpandedSubjects(prev => ({...prev, [subject.id]: !prev[subject.id]}))}
+                  >
                     <h3 style={{fontSize:14, fontWeight:700, color:'var(--accent)', display:'flex', alignItems:'center', gap:8}}>
+                      {isSubExpanded ? <ChevronDown size={16}/> : <ChevronRight size={16}/>}
                       <BookOpen size={16}/> {subject.name}
                     </h3>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -805,7 +812,7 @@ export default function Dashboard() {
                       <button 
                         className="btn-icon-danger" 
                         style={{ padding: '2px 8px', height: 'auto', fontSize: 10, background: '#ef444415' }} 
-                        onClick={() => deleteActivityCorrections(subject.name)}
+                        onClick={(e) => { e.stopPropagation(); deleteActivityCorrections(subject.name); }}
                         title={`Apagar todas as correções de ${subject.name}`}
                       >
                         <Trash2 size={12}/> Limpar Matéria
@@ -813,58 +820,72 @@ export default function Dashboard() {
                     </div>
                   </div>
                   
-                  <div style={{padding:'10px 20px 20px'}}>
-                    {Object.entries(activityGroups).map(([actTitle, subs]) => (
-                      <div key={actTitle} style={{marginTop:16}}>
-                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10}}>
-                          <h4 style={{fontSize:12, fontWeight:600, color:'var(--text1)', display:'flex', alignItems:'center', gap:6, opacity:0.8}}>
-                            <Sparkles size={14} color="#10b981"/> {actTitle}
-                          </h4>
-                          <button 
-                            className="btn-icon-danger" 
-                            style={{padding:4, height:'auto', width:'auto'}} 
-                            title={`Apagar todas as ${subs.length} correções de ${actTitle}`}
-                            onClick={() => deleteActivityCorrections(subject.name, actTitle)}
-                          >
-                            <Trash2 size={12}/> <span style={{fontSize:10}}>Limpar Atividade</span>
-                          </button>
-                        </div>
-                        <div className="table-wrap" style={{border:'none', borderRadius:8, background:'var(--bg)'}}>
-                          <table className="table table-sm">
-                            <thead>
-                              <tr><th>Aluno</th><th>Nota</th><th>Data</th><th style={{textAlign:'right'}}>Ações</th></tr>
-                            </thead>
-                            <tbody>
-                              {subs.sort((a,b) => b.submittedAt.localeCompare(a.submittedAt)).map(sub => {
-                                const cfg = STATUS_CONFIG[sub.status] ?? STATUS_CONFIG.pending;
-                                return (
-                                  <tr key={sub.id} className={selected?.id === sub.id ? 'selected' : ''} onClick={() => setSelected(sub)} style={{cursor:'pointer'}}>
-                                    <td className="td-name" style={{fontSize:13}}>
-                                      {sub.studentName}
-                                    </td>
-                                    <td>
-                                      <span className="status-pill" style={{background:cfg.color+'18',color:cfg.color, fontSize:11, padding:'2px 8px'}}>
-                                        <cfg.icon size={11}/> {sub.grade?.toFixed(1) ?? '“'}
-                                      </span>
-                                    </td>
-                                    <td className="td-muted" style={{fontSize:11}}>{sub.submittedAt.split(' ')[0]}</td>
-                                    <td>
-                                      <div className="actions" onClick={e => e.stopPropagation()} style={{justifyContent:'flex-end'}}>
-                                        <button className="btn-icon" onClick={() => setSelected(sub)} title="Ver Detalhes"><ChevronRight size={14}/></button>
-                                        <button className="btn-icon-danger" onClick={() => del('submission', sub.id)} title="Excluir"><Trash2 size={14}/></button>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  {isSubExpanded && (
+                    <div style={{padding:'10px 20px 20px'}}>
+                      {Object.entries(activityGroups).map(([actTitle, subs]) => {
+                        const actId = `${subject.id}-${actTitle}`;
+                        const isActExpanded = !!expandedActivities[actId];
+                        return (
+                          <div key={actTitle} style={{marginTop:16}}>
+                            <div 
+                              style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10, cursor:'pointer'}}
+                              onClick={() => setExpandedActivities(prev => ({...prev, [actId]: !prev[actId]}))}
+                            >
+                              <h4 style={{fontSize:12, fontWeight:600, color:'var(--text1)', display:'flex', alignItems:'center', gap:6, opacity:0.8}}>
+                                {isActExpanded ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
+                                <Sparkles size={14} color="#10b981"/> {actTitle}
+                              </h4>
+                              <button 
+                                className="btn-icon-danger" 
+                                style={{padding:4, height:'auto', width:'auto'}} 
+                                title={`Apagar todas as ${subs.length} correções de ${actTitle}`}
+                                onClick={(e) => { e.stopPropagation(); deleteActivityCorrections(subject.name, actTitle); }}
+                              >
+                                <Trash2 size={12}/> <span style={{fontSize:10}}>Limpar Atividade</span>
+                              </button>
+                            </div>
+                            
+                            {isActExpanded && (
+                              <div className="table-wrap fade-in" style={{border:'none', borderRadius:8, background:'var(--bg)'}}>
+                                <table className="table table-sm">
+                                  <thead>
+                                    <tr><th>Aluno</th><th>Nota</th><th>Data</th><th style={{textAlign:'right'}}>Ações</th></tr>
+                                  </thead>
+                                  <tbody>
+                                    {subs.sort((a,b) => b.submittedAt.localeCompare(a.submittedAt)).map(sub => {
+                                      const cfg = STATUS_CONFIG[sub.status] ?? STATUS_CONFIG.pending;
+                                      return (
+                                        <tr key={sub.id} className={selected?.id === sub.id ? 'selected' : ''} onClick={() => setSelected(sub)} style={{cursor:'pointer'}}>
+                                          <td className="td-name" style={{fontSize:13}}>
+                                            {sub.studentName}
+                                          </td>
+                                          <td>
+                                            <span className="status-pill" style={{background:cfg.color+'18',color:cfg.color, fontSize:11, padding:'2px 8px'}}>
+                                              <cfg.icon size={11}/> {sub.grade?.toFixed(1) ?? '—'}
+                                            </span>
+                                          </td>
+                                          <td className="td-muted" style={{fontSize:11}}>{sub.submittedAt.split(' ')[0]}</td>
+                                          <td>
+                                            <div className="actions" onClick={e => e.stopPropagation()} style={{justifyContent:'flex-end'}}>
+                                              <button className="btn-icon" onClick={() => setSelected(sub)} title="Ver Detalhes"><ChevronRight size={14}/></button>
+                                              <button className="btn-icon-danger" onClick={() => del('submission', sub.id)} title="Excluir"><Trash2 size={14}/></button>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
+            })}
             })}
             
             {dbData.submissions.length === 0 && (
@@ -877,7 +898,7 @@ export default function Dashboard() {
           </div>
         </>}
 
-        {/* â•â• RELATÃ“RIOS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+        {/* â•â• RELATÓRIOS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         {view === 'reports' && (() => {
           const getActName = (feedback: string) => {
             const fl = (feedback ?? '').split('\n')[0];
@@ -1152,7 +1173,7 @@ export default function Dashboard() {
             </div>
           );
         })()}
-        {/* â•â• MATÃ‰RIAS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+        {/* â•â• MATÉRIAS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         {view === 'subjects' && <>
           <header className="header">
             <div><h1>Matérias</h1><p className="subtitle">{dbData.subjects.length} disciplinas</p></div>
@@ -1275,14 +1296,14 @@ export default function Dashboard() {
           </div>
         </>}
 
-        {/* â•â• ENTURMAÃ‡ÃƒO â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•= */}
+        {/* â•â• ENTURMAÇÃO â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•= */}
         {view === 'enrollment' && <>
           <header className="header" style={{flexDirection:'column', alignItems:'flex-start', gap:16}}>
             <div><h1>Enturmação</h1><p className="subtitle">Associe alunos a matérias clicando duas vezes sobre o card.</p></div>
             <div style={{display:'flex', gap:16, alignItems:'center', flexWrap:'wrap'}}>
               <select className="input" style={{maxWidth:300, background:'var(--surface)'}} value={enrollSubjectId} onChange={e => setEnrollSubjectId(e.target.value)}>
                 <option value="">-- Selecione uma matéria --</option>
-                {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code}) {s.closed ? 'ðŸ”’' : ''}</option>)}
+                {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code}) {s.closed ? '🔒' : ''}</option>)}
               </select>
 
               {enrollSubjectId && (() => {
@@ -1354,7 +1375,7 @@ export default function Dashboard() {
 
 
 
-        {/* â•â• CORREÃ‡ÃƒO EM LOTE â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•= */}
+        {/* â•â• CORREÇÃO EM LOTE â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•= */}
         {view === 'batch' && (
           <div className="fade-in">
             <header className="header" style={{ marginBottom: 24 }}>
@@ -1637,7 +1658,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* â•â• LANÃ‡AMENTO (COPIA E COLA) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+        {/* â•â• LANÇAMENTO (COPIA E COLA) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         {view === 'copy' && (
           <div className="fade-in">
             <header className="header" style={{ marginBottom: 24 }}>
@@ -1773,7 +1794,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* â•â• RELATÃ“RIOS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+        {/* â•â• RELATÓRIOS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         {view === 'reports' && (
           <div className="fade-in">
             <header className="header" style={{ marginBottom: 24 }}>
@@ -1909,7 +1930,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* â•â• IMPLEMENTAÃ‡Ã•ES â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•= */}
+        {/* â•â• IMPLEMENTAÇÃ•ES â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•= */}
         {view === 'implementacoes' && <>
           <header className="header">
             <div><h1>Implementações</h1><p className="subtitle">Gestão de ideias e categorias</p></div>
@@ -1980,7 +2001,7 @@ export default function Dashboard() {
                 </div>
                 <div className="toggle-group" style={{ marginTop: 0, minWidth: 260 }}>
                   <button className={dbMode === 'local' ? 'active' : ''} onClick={() => setDbMode('local')}>
-                    ðŸ“‚ JSON Local
+                    📂 JSON Local
                   </button>
                   <button className={dbMode === 'remote' ? 'active' : ''} onClick={() => setDbMode('remote')}>
                     â˜ï¸ Supabase Cloud
@@ -1990,7 +2011,7 @@ export default function Dashboard() {
               <div style={{ fontSize: 12, padding: '10px 16px', background: 'var(--surface2)', borderRadius: 8, color: 'var(--text2)', border: '1px solid var(--border)' }}>
                 {dbMode === 'remote' 
                   ? '✅ Modo Nuvem ativo: Sincronização em tempo real e persistência global habilitada.' 
-                  : 'âš  Modo Local ativo: Os dados serão salvos apenas no sistema de arquivos deste servidor local.'}
+                  : '⚠️ Modo Local ativo: Os dados serão salvos apenas no sistema de arquivos deste servidor local.'}
               </div>
             </div>
 
@@ -2069,7 +2090,7 @@ export default function Dashboard() {
           )}
           {selected.feedback && (
             <div className="feedback-box">
-              <p className="feedback-title"><Sparkles size={13}/> Análise AvalIA</p>
+              <p className="feedback-title"><Sparkles size={13}/> Análise Aval.IA</p>
               <p className="feedback-text">{selected.feedback}</p>
             </div>
           )}
@@ -2080,7 +2101,7 @@ export default function Dashboard() {
         </aside>
       )}
 
-      {/* â•â• MODAL: NOVA MATÃ‰RIA â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+      {/* â•â• MODAL: NOVA MATÉRIA â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       {showSubjectModal && (
         <div className="modal-overlay">
           <div className="modal">
