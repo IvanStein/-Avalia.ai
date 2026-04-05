@@ -320,6 +320,10 @@ export default function Dashboard() {
   const [canvActTitle, setCanvActTitle] = useState('');
   const [canvActiveSubId, setCanvActiveSubId] = useState<string | null>(null);
 
+  // Audit States
+  const [auditSubId, setAuditSubId] = useState<string | null>(null);
+  const [auditNote, setAuditNote] = useState('');
+
   // Manual Lançamento States
   const [manuStu, setManuStu] = useState('');
   const [manuSub, setManuSub] = useState('');
@@ -848,8 +852,6 @@ export default function Dashboard() {
     document.body.removeChild(link);
   };
 
-  if (!hasMounted) return null;
-
   const generateAuditReport = () => {
     const audited = dbData.submissions.filter(s => s.status === 'audited');
     if (audited.length === 0) return alert('Nenhum caso auditado para relatório.');
@@ -878,6 +880,8 @@ export default function Dashboard() {
        alert('Erro: ' + e.message);
     }
   };
+
+  if (!hasMounted) return null;
 
   // â”€â”€ NAV â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const NavItem = ({ v, icon: Icon, label }: { v: View; icon: any; label: string }) => (
