@@ -71,17 +71,35 @@ function normalize(s: string) {
 }
 
 function matchStudentByFilename(filename: string, students: Student[]): { studentId: string; name: string; score: number } {
-  const fname = normalize(filename.replace(/\.pdf$/i, ''));
-  const fnWords = fname.split(/\s+/).filter(Boolean);
-
+  const normFilename = normalize(filename.replace(/\.pdf$/i, ''));
+  const compactFilename = normFilename.replace(/\s+/g, '');
+  
   let best = { studentId: '', name: '', score: 0 };
   for (const s of students) {
-    const snWords = normalize(s.name).split(/\s+/).filter(Boolean);
-    let hits = 0;
-    for (const fw of fnWords) {
-      if (snWords.some(sw => sw.startsWith(fw) || fw.startsWith(sw))) hits++;
+    const sNameNorm = normalize(s.name);
+    let score = 0;
+
+    // 1. Prioritize RA Match (Registration ID) - usually a unique number in the filename
+    if (s.ra && s.ra.length > 2 && compactFilename.includes(normalize(s.ra).replace(/\s+/g, ''))) {
+      score = 2.0; 
+    } else {
+      // 2. Compact Name Match (handles 'alanayasminzauza' style)
+      const sNameCompact = sNameNorm.replace(/\s+/g, '');
+      if (sNameCompact.length > 5 && compactFilename.includes(sNameCompact)) {
+        score = 1.5;
+      } else {
+        // 3. Word-based scoring (ignoring small connectors like 'da', 'de', 'e')
+        const snWords = sNameNorm.split(/\s+/).filter(w => w.length > 2);
+        if (snWords.length > 0) {
+          let hits = 0;
+          for (const sw of snWords) {
+            if (compactFilename.includes(sw)) hits++;
+          }
+          score = hits / snWords.length;
+        }
+      }
     }
-    const score = snWords.length ? hits / snWords.length : 0;
+
     if (score > best.score) best = { studentId: s.id, name: s.name, score };
   }
   return best;
@@ -172,6 +190,56 @@ export default function Dashboard() {
   const [reportActivityId, setReportActivityId] = useState('');
   const [expandedSubjects, setExpandedSubjects] = useState<Record<string, boolean>>({});
   const [expandedActivities, setExpandedActivities] = useState<Record<string, boolean>>({});
+  const reportPreviewData = useMemo(() => {
+    if (!reportSubjectId) return null;
+    if (reportType === 'activity' && !reportActivityId) return null;
+    const sub = dbData.subjects.find(s => s.id === reportSubjectId);
+    if (reportType === 'subject') {
+      const acts = dbData.activities.filter(a => a.subjectId === reportSubjectId);
+      const head = ['Aluno', ...acts.flatMap(a => [`${a.title} (N)`, `${a.title} (F)`]), 'Média', 'Faltas'];
+      const body = dbData.students
+        .filter(s => (s.subjectIds || []).includes(reportSubjectId))
+        .sort((a,b) => a.name.localeCompare(b.name))
+        .map(stu => {
+          let totalGrade = 0; let totalAbsences = 0;
+          const row = [stu.name];
+          acts.forEach(a => {
+            const submission = dbData.submissions.find(subm => 
+              subm.studentName === stu.name && subm.subject === sub?.name && subm.status === 'graded' &&
+              (getActName(subm.feedback || '') === a.title)
+            );
+            if (submission) {
+              row.push(submission.grade?.toFixed(1) || '0.0'); row.push('0');
+              totalGrade += submission.grade || 0;
+            } else {
+              row.push('0.0'); row.push('2');
+              totalAbsences += 2;
+            }
+          });
+          row.push((totalGrade / (acts.length || 1)).toFixed(1));
+          row.push(totalAbsences.toString());
+          return row;
+        });
+      return { head, body, title: sub?.name, isMatrix: true };
+    } else {
+      const act = dbData.activities.find(a => a.id === reportActivityId);
+      const head = ['Aluno', 'Nota', 'Faltas', 'Feedback'];
+      const body = dbData.students
+        .filter(s => (s.subjectIds || []).includes(reportSubjectId))
+        .sort((a,b) => a.name.localeCompare(b.name))
+        .map(stu => {
+          const submission = dbData.submissions.find(subm => 
+            subm.studentName === stu.name && subm.subject === sub?.name && subm.status === 'graded' &&
+            (getActName(subm.feedback || '') === act?.title)
+          );
+          if (submission) {
+            return [stu.name, submission.grade?.toFixed(1) || '0.0', '0', submission.feedback || 'Sem feedback'];
+          }
+          return [stu.name, '0.0', '2', 'Não entregou / Ausente'];
+        });
+      return { head, body, title: `${sub?.name} - ${act?.title}`, isMatrix: false };
+    }
+  }, [reportSubjectId, reportType, reportActivityId, dbData]);
 
   const fetchDB = useCallback(async () => {
     setLoading(true);
@@ -1587,91 +1655,84 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {reportSubjectId && (reportType === 'subject' || reportActivityId) && (
-              <div className="card" style={{ padding: 24, textAlign: 'center' }}>
-                <BarChart2 size={48} color="var(--accent)" style={{ marginBottom: 16, opacity: 0.5 }} />
-                <h3>{reportType === 'subject' ? 'Relatório Geral da Matéria' : 'Relatório por Atividade'}</h3>
-                <p style={{ color: 'var(--text2)', marginBottom: 20 }}>
-                  {reportType === 'subject' 
-                    ? 'Lista horizontal com todas as atividades, notas finais e faltas totais.'
-                    : 'Lista detalhada com nota, resumo da correção e faltas desta atividade específica.'}
-                </p>
-                <button className="btn-primary" style={{ padding: '12px 32px' }} onClick={async () => {
-                  const { jsPDF } = await import('jspdf');
-                  const autoTable = (await import('jspdf-autotable')).default;
-                  const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
-                  const sub = dbData.subjects.find(s => s.id === reportSubjectId);
+            {reportPreviewData && (
+              <div className="fade-in">
+                <div className="card" style={{ padding: 24, marginBottom: 24 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                    <div>
+                      <h3 style={{ fontSize: 16, fontWeight: 700 }}>Prévisualização do Relatório</h3>
+                      <p style={{ fontSize: 12, color: 'var(--text2)' }}>
+                        {reportPreviewData.title} • {reportPreviewData.body.length} alunos identificados
+                      </p>
+                    </div>
+                    <button className="btn-primary" style={{ padding: '10px 24px' }} onClick={async () => {
+                      const { jsPDF } = await import('jspdf');
+                      const autoTable = (await import('jspdf-autotable')).default;
+                      const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+                      
+                      doc.setFontSize(18);
+                      doc.text(dbData.configs.institution || 'Aura AI - Relatório', 14, 20);
+                      doc.setFontSize(11);
+                      doc.setTextColor(100);
+                      doc.text(`Professor: ${dbData.configs.professor || 'Não informado'}`, 14, 28);
+                      doc.text(`Matéria: ${reportPreviewData.title}`, 14, 34);
+                      doc.text(`Data: ${new Date().toLocaleDateString()}`, doc.internal.pageSize.width - 60, 20);
+
+                      autoTable(doc, {
+                        head: [reportPreviewData.head],
+                        body: reportPreviewData.body,
+                        startY: 45,
+                        theme: 'grid',
+                        styles: { fontSize: reportPreviewData.isMatrix ? 7 : 9, cellPadding: 2 },
+                        headStyles: { fillColor: [99, 102, 241], textColor: 255 },
+                        columnStyles: !reportPreviewData.isMatrix ? { 3: { cellWidth: 100 } } : undefined
+                      });
+                      doc.save(`Relatorio_${reportPreviewData.title.replace(/\s+/g, '_')}.pdf`);
+                    }}>
+                      <BarChart2 size={16}/> Gerar PDF Final
+                    </button>
+                  </div>
                   
-                  // Header using global settings
-                  doc.setFontSize(18);
-                  doc.text(dbData.configs.institution || 'Relatório de Notas', 14, 20);
-                  doc.setFontSize(11);
-                  doc.setTextColor(100);
-                  doc.text(`Professor: ${dbData.configs.professor || 'Não informado'}`, 14, 28);
-                  doc.text(`Matéria: ${sub?.name} (${sub?.code})`, 14, 34);
-                  if (reportType === 'activity') {
-                    const act = dbData.activities.find(a => a.id === reportActivityId);
-                    doc.text(`Atividade: ${act?.title}`, 14, 40);
-                  }
-                  doc.text(`Data de Emissão: ${new Date().toLocaleDateString()}`, doc.internal.pageSize.width - 60, 20);
-
-                  let head: string[][] = [];
-                  let body: string[][] = [];
-
-                  if (reportType === 'subject') {
-                    const acts = dbData.activities.filter(a => a.subjectId === reportSubjectId);
-                    head = [['Aluno', ...acts.flatMap(a => [`${a.title} (N)`, `${a.title} (F)`]), 'Média Final', 'Total Faltas']];
-                    body = dbData.students
-                      .filter(s => (s.subjectIds || []).includes(reportSubjectId))
-                      .sort((a,b) => a.name.localeCompare(b.name))
-                      .map(stu => {
-                        let totalGrade = 0; let totalAbsences = 0;
-                        const row = [stu.name];
-                        acts.forEach(a => {
-                          const subName = dbData.subjects.find(s => s.id === reportSubjectId)?.name;
-                          const submission = dbData.submissions.find(sub => 
-                            sub.studentName === stu.name && sub.subject === subName && sub.status === 'graded'
-                          );
-                          if (submission) {
-                            row.push(submission.grade?.toFixed(1) || '0.0'); row.push('0');
-                            totalGrade += submission.grade || 0;
-                          } else {
-                            row.push('0.0'); row.push('2');
-                            totalAbsences += 2;
-                          }
-                        });
-                        row.push((totalGrade / (acts.length || 1)).toFixed(1));
-                        row.push(totalAbsences.toString());
-                        return row;
-                      });
-                  } else {
-                    head = [['Aluno', 'Nota', 'Faltas', 'Resumo da Correção']];
-                    body = dbData.students
-                      .filter(s => (s.subjectIds || []).includes(reportSubjectId))
-                      .sort((a,b) => a.name.localeCompare(b.name))
-                      .map(stu => {
-                        const subName = dbData.subjects.find(s => s.id === reportSubjectId)?.name;
-                        const submission = dbData.submissions.find(sub => 
-                          sub.studentName === stu.name && sub.subject === subName && sub.status === 'graded'
-                        );
-                        if (submission) {
-                          return [stu.name, submission.grade?.toFixed(1) || '0.0', '0', submission.feedback || 'Sem feedback'];
-                        }
-                        return [stu.name, '0.0', '2', 'Não entregou / Ausente'];
-                      });
-                  }
-
-                  autoTable(doc, {
-                    head, body, startY: reportType === 'subject' ? 45 : 50,
-                    theme: 'grid', styles: { fontSize: reportType === 'subject' ? 7 : 9, cellPadding: 2 },
-                    headStyles: { fillColor: [99, 102, 241], textColor: 255 },
-                    columnStyles: reportType === 'activity' ? { 3: { cellWidth: 120 } } : undefined
-                  });
-
-                  doc.save(`Relatorio_${sub?.code || 'Aura'}_${reportType}.pdf`);
-                }}>
-                  Gerar PDF ({reportType === 'subject' ? 'Matéria' : 'Atividade'})
-                </button>
+                  <div className="table-wrap" style={{ maxHeight: 500, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 12 }}>
+                    <table className="table" style={{ fontSize: 11, borderCollapse: 'separate', borderSpacing: 0 }}>
+                      <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--surface2)' }}>
+                        <tr>
+                          {reportPreviewData.head.map((h, i) => (
+                            <th key={i} style={{ 
+                              whiteSpace: 'nowrap', 
+                              background: 'var(--surface2)', 
+                              borderBottom: '2px solid var(--border)',
+                              padding: '12px 16px',
+                              textAlign: 'left'
+                            }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportPreviewData.body.map((row, i) => (
+                          <tr key={i}>
+                            {row.map((cell, j) => (
+                              <td key={j} style={{ 
+                                padding: '10px 16px',
+                                borderBottom: '1px solid var(--border)',
+                                fontWeight: j === 0 ? 600 : 400,
+                                color: j === 0 ? 'var(--text1)' : 'var(--text2)',
+                              }}>
+                                {j === 3 && !reportPreviewData.isMatrix ? (
+                                  <div style={{ maxWidth: 400, maxHeight: 40, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                                    {cell}
+                                  </div>
+                                ) : (
+                                  cell
+                                )}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             )}
           </div>
