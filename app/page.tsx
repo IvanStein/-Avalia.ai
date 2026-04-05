@@ -203,7 +203,7 @@ export default function Dashboard() {
       ));
 
       const head = ['Aluno', ...acts.flatMap(a => {
-          const short = a.title.match(/A\.A \d+/i)?.[0] || a.title;
+          const short = a.title.split('-')[0].trim();
           return [`${short}`, `${short} Faltas`];
       }), 'Média', 'Total Faltas'];
 
