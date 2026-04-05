@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Upload, BookOpen, CheckCircle, Clock, GraduationCap, Sparkles,
   Database, UserPlus, Plus, Trash2, AlertCircle, Layers, X,
