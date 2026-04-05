@@ -204,7 +204,7 @@ export default function Dashboard() {
 
       const head = ['Aluno', ...acts.flatMap(a => {
           const short = a.title.split('-')[0].trim();
-          return [`${short}`, `${short} Faltas`];
+          return [`${short}`, `Faltas`];
       }), 'Média', 'Total Faltas'];
 
       const body = dbData.students
