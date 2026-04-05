@@ -123,7 +123,7 @@ function syllabusChunks(raw: string): string[] {
 
 // â”€â”€ COMPONENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function Dashboard() {
-  type View = 'dashboard'|'subjects'|'students'|'enrollment'|'activities'|'batch'|'implementacoes'|'settings'|'copy'|'reports'|'student-profile'|'manual';
+  type View = 'dashboard'|'subjects'|'students'|'enrollment'|'activities'|'batch'|'implementacoes'|'settings'|'copy'|'reports'|'student-profile'|'manual'|'canvas';
   const [view, setView] = useState<View>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
@@ -311,6 +311,19 @@ export default function Dashboard() {
       setLoading(false);
     }
   }, [dbMode]);
+
+  // Canvas Helper States
+  const [canvSubId, setCanvSubId] = useState('');
+  const [canvActTitle, setCanvActTitle] = useState('');
+  const [canvActiveSubId, setCanvActiveSubId] = useState<string | null>(null);
+
+  // Manual Lançamento States
+  const [manuStu, setManuStu] = useState('');
+  const [manuSub, setManuSub] = useState('');
+  const [manuAct, setManuAct] = useState('');
+  const [manuGrade, setManuGrade] = useState('0.0');
+  const [manuFeed, setManuFeed] = useState('');
+  const [manuSaving, setManuSaving] = useState(false);
 
   useEffect(() => { setHasMounted(true); }, []);
   useEffect(() => { if (hasMounted) fetchDB(); }, [dbMode, hasMounted]);
@@ -862,6 +875,7 @@ export default function Dashboard() {
           <p className="nav-label">Trabalho</p>
           <NavItem v="batch"          icon={Layers}      label="Correção"/>
           <NavItem v="manual"         icon={Edit2}       label="Lançamento Manual"/>
+          <NavItem v="canvas"         icon={Copy}        label="Assistente Canvas"/>
           <NavItem v="copy"           icon={Layers}      label="Copia de Atividades"/>
           <NavItem v="reports"        icon={BarChart2}   label="Relatórios"/>
           <p className="nav-label">Sistema</p>
@@ -1535,22 +1549,156 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* ── ASSISTENTE CANVAS ──────────────────────────────────────────────────────── */}
+        {view === 'canvas' && (() => {
+          const subject = dbData.subjects.find(s => s.id === canvSubId);
+          const filteredSubs = dbData.submissions.filter(s => 
+            s.subject === subject?.name && 
+            (canvActTitle === '' || getActName(s.feedback || '') === canvActTitle)
+          ).sort((a,b) => a.studentName.localeCompare(b.studentName));
+
+          const activeSub = filteredSubs.find(s => s.id === canvActiveSubId) || filteredSubs[0];
+
+          const copyToClipboard = (text: string, label: string) => {
+            navigator.clipboard.writeText(text);
+          };
+
+          const getSummary = (text: string = '') => {
+            if (!text) return '';
+            const sentences = text.replace(/Atividade: .*\n/, '').split(/[.!?]\s/);
+            if (sentences.length <= 2) return text;
+            return sentences.slice(0, 2).join('. ') + '.';
+          };
+
+          return (
+            <div className="fade-in">
+              <header className="header">
+                <div><h1>Assistente de Lançamento (Canvas)</h1><p className="subtitle">Facilite o "copia e cola" para o SpeedGrader</p></div>
+              </header>
+
+              <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <div>
+                    <label className="field-label">Selecione a Matéria no Aval.IA</label>
+                    <select className="input" value={canvSubId} onChange={e => { setCanvSubId(e.target.value); setCanvActTitle(''); setCanvActiveSubId(null); }}>
+                      <option value="">Selecione...</option>
+                      {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="field-label">Filtrar por Atividade</label>
+                    <select className="input" value={canvActTitle} onChange={e => { setCanvActTitle(e.target.value); setCanvActiveSubId(null); }} disabled={!canvSubId}>
+                      <option value="">Todas as Avaliações</option>
+                      {dbData.activities.filter(a => a.subjectId === canvSubId).map(a => <option key={a.id} value={a.title}>{a.title}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {!canvSubId ? (
+                <div className="empty-state" style={{ height: 300 }}>
+                  <Copy size={48} color="var(--border)" style={{ marginBottom: 16 }}/>
+                  <p>Selecione uma matéria para iniciar o assistente de lançamento.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 24, height: 'calc(100vh - 350px)', minHeight: 500 }}>
+                  {/* Student List Sidebar */}
+                  <div className="card" style={{ padding: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ padding: '12px 16px', background: 'var(--surface2)', borderBottom: '1px solid var(--border)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text2)' }}>
+                      Alunos ({filteredSubs.length})
+                    </div>
+                    {filteredSubs.map(s => (
+                      <div 
+                        key={s.id} 
+                        onClick={() => setCanvActiveSubId(s.id)}
+                        style={{ 
+                          padding: '12px 16px', 
+                          cursor: 'pointer', 
+                          borderBottom: '1px solid var(--border)',
+                          background: (canvActiveSubId === s.id || (!canvActiveSubId && canvActiveSubId === s.id)) ? 'var(--accent)10' : 'transparent',
+                          borderLeft: (canvActiveSubId === s.id) ? '4px solid var(--accent)' : '4px solid transparent',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center'
+                        }}
+                      >
+                        <span style={{ fontSize: 13, fontWeight: canvActiveSubId === s.id ? 600 : 400, color: canvActiveSubId === s.id ? 'var(--accent)' : 'var(--text1)' }}>{s.studentName}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: (s.grade || 0) >= 7 ? 'var(--blue)' : 'var(--red)' }}>{s.grade?.toFixed(1)}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* High-Action Clipboard Area */}
+                  <div className="card" style={{ padding: 32, display: 'flex', flexDirection: 'column', gap: 32, background: 'var(--surface2)30' }}>
+                    {!activeSub ? (
+                       <div className="empty-state"><p>Selecione um aluno na lista</p></div>
+                    ) : (
+                      <>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <div>
+                            <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 4 }}>{activeSub.studentName}</h2>
+                            <p style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 14 }}>{activeSub.subject} • {getActName(activeSub.feedback || '') || 'Geral'}</p>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <p style={{ fontSize: 11, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '.1em' }}>Nota para o Canvas</p>
+                            <div style={{ fontSize: 48, fontWeight: 900, color: (activeSub.grade || 0) >= 7 ? 'var(--blue)' : 'var(--red)', lineHeight: 1 }}>{activeSub.grade?.toFixed(1)}</div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32 }}>
+                          {/* Column 1: Grade Action */}
+                          <div className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, border: '2px solid var(--accent)30' }}>
+                             <div style={{ fontSize: 13, color: 'var(--text2)', fontWeight: 600 }}>Campo "Nota de 0"</div>
+                             <button className="btn-primary" style={{ width: '100%', height: 60, fontSize: 18 }} onClick={() => copyToClipboard(activeSub.grade?.toFixed(1) || '0.0', 'Nota')}>
+                               <Copy size={20}/> Copiar Nota: <b>{activeSub.grade?.toFixed(1)}</b>
+                             </button>
+                             <p style={{ fontSize: 10, color: 'var(--text2)' }}>Clique para copiar e cole no Canvas</p>
+                          </div>
+
+                          {/* Column 2: Feedback Summary Action */}
+                          <div className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 12, border: '2px solid var(--accent)30' }}>
+                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                               <div style={{ fontSize: 13, color: 'var(--text2)', fontWeight: 600 }}>Campo "Comentários" (Resumo)</div>
+                               <button className="btn-ghost" style={{ padding: '4px 10px', height: 'auto', fontSize: 11 }} onClick={() => copyToClipboard(getSummary(activeSub.feedback), 'Resumo')}>
+                                 <Copy size={12}/> Copiar Resumo
+                               </button>
+                             </div>
+                             <div style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: 12, fontSize: 12, color: 'var(--text1)', minHeight: 80, lineHeight: 1.5 }}>
+                               {getSummary(activeSub.feedback)}
+                             </div>
+                          </div>
+                        </div>
+
+                        {/* Full Feedback Column */}
+                        <div className="card" style={{ padding: 20 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                            <div style={{ fontSize: 13, color: 'var(--text2)', fontWeight: 600 }}>Feedback Completo (Referência)</div>
+                            <button className="btn-ghost" style={{ padding: '4px 10px', height: 'auto', fontSize: 11 }} onClick={() => copyToClipboard(activeSub.feedback || '', 'Completo')}>
+                               <Copy size={12}/> Copiar Tudo
+                            </button>
+                          </div>
+                          <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: 16, fontSize: 13, color: 'var(--text2)', maxHeight: 200, overflow: 'auto', border: '1px solid var(--border)', whiteSpace: 'pre-wrap' }}>
+                            {activeSub.feedback}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* ── LANÇAMENTO MANUAL ──────────────────────────────────────────────────────── */}
         {view === 'manual' && (() => {
-          const [selStu, setSelStu] = useState('');
-          const [selSub, setSelSub] = useState('');
-          const [selAct, setSelAct] = useState('');
-          const [selGrade, setSelGrade] = useState('0.0');
-          const [selFeed, setSelFeed] = useState('');
-          const [saving, setSaving] = useState(false);
-
           const handleManualSave = async () => {
-            if (!selStu || !selSub) return alert('Selecione aluno e matéria');
-            setSaving(true);
+            if (!manuStu || !manuSub) return alert('Selecione aluno e matéria');
+            setManuSaving(true);
             try {
-              const stu = dbData.students.find(s => s.id === selStu);
-              const sub = dbData.subjects.find(s => s.id === selSub);
-              const act = dbData.activities.find(a => a.id === selAct);
+              const stu = dbData.students.find(s => s.id === manuStu);
+              const sub = dbData.subjects.find(s => s.id === manuSub);
+              const act = dbData.activities.find(a => a.id === manuAct);
               if (!stu || !sub) throw new Error('Dados inválidos');
 
               const activityPrefix = act ? `Atividade: ${act.title}\n` : '';
@@ -1558,17 +1706,17 @@ export default function Dashboard() {
                 studentName: stu.name,
                 subject: sub.name,
                 status: "graded",
-                grade: parseFloat(selGrade),
-                feedback: activityPrefix + selFeed,
+                grade: parseFloat(manuGrade),
+                feedback: activityPrefix + manuFeed,
                 source: "pdf", 
                 submittedAt: new Date().toISOString().split("T")[0],
               });
               alert('Nota lançada com sucesso!');
-              setSelGrade('0.0'); setSelFeed('');
+              setManuGrade('0.0'); setManuFeed('');
               fetchDB();
               setView('dashboard');
             } catch (e:any) { alert(e.message); }
-            setSaving(false);
+            setManuSaving(false);
           };
 
           return (
@@ -1581,7 +1729,7 @@ export default function Dashboard() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
                   <div>
                     <label className="field-label">Aluno</label>
-                    <select className="input" value={selStu} onChange={e => setSelStu(e.target.value)} style={{height: 48}}>
+                    <select className="input" value={manuStu} onChange={e => setManuStu(e.target.value)} style={{height: 48}}>
                       <option value="">Selecione o Aluno...</option>
                       {dbData.students.sort((a,b) => a.name.localeCompare(b.name)).map(s => (
                         <option key={s.id} value={s.id}>{s.name} {s.ra ? `(${s.ra})` : ''}</option>
@@ -1590,7 +1738,7 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <label className="field-label">Matéria</label>
-                    <select className="input" value={selSub} onChange={e => { setSelSub(e.target.value); setSelAct(''); }} style={{height: 48}}>
+                    <select className="input" value={manuSub} onChange={e => { setManuSub(e.target.value); setManuAct(''); }} style={{height: 48}}>
                       <option value="">Selecione a Matéria...</option>
                       {dbData.subjects.sort((a,b) => a.name.localeCompare(b.name)).map(s => (
                         <option key={s.id} value={s.id}>{s.name}</option>
@@ -1601,9 +1749,9 @@ export default function Dashboard() {
 
                 <div style={{ marginBottom: 24 }}>
                   <label className="field-label">Atividade Correspondente (Opcional)</label>
-                  <select className="input" value={selAct} onChange={e => setSelAct(e.target.value)} disabled={!selSub} style={{height: 48}}>
+                  <select className="input" value={manuAct} onChange={e => setManuAct(e.target.value)} disabled={!manuSub} style={{height: 48}}>
                     <option value="">-- Avaliação Geral / Sem Vínculo Específico --</option>
-                    {dbData.activities.filter(a => a.subjectId === selSub).map(a => (
+                    {dbData.activities.filter(a => a.subjectId === manuSub).map(a => (
                       <option key={a.id} value={a.id}>{a.title}</option>
                     ))}
                   </select>
@@ -1612,25 +1760,25 @@ export default function Dashboard() {
                 <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: 32, marginBottom: 32 }}>
                   <div>
                     <label className="field-label">Nota Final</label>
-                    <input type="number" step="0.1" min="0" max="10" className="input" value={selGrade} onChange={e => setSelGrade(e.target.value)} style={{ fontSize: 24, fontWeight: 800, textAlign: 'center', height: 60, color: parseFloat(selGrade) >= 7 ? 'var(--blue)' : 'var(--red)' }} />
+                    <input type="number" step="0.1" min="0" max="10" className="input" value={manuGrade} onChange={e => setManuGrade(e.target.value)} style={{ fontSize: 24, fontWeight: 800, textAlign: 'center', height: 60, color: parseFloat(manuGrade) >= 7 ? 'var(--blue)' : 'var(--red)' }} />
                   </div>
                   <div>
                     <label className="field-label">Feedback ou Observações do Professor</label>
-                    <textarea className="input" rows={6} placeholder="Utilize este espaço para registrar considerações pedagógicas, justificativas de ajuste ou observações sobre a entrega..." value={selFeed} onChange={e => setSelFeed(e.target.value)} style={{padding: 16}} />
+                    <textarea className="input" rows={6} placeholder="Utilize este espaço para registrar considerações pedagógicas, justificativas de ajuste ou observações sobre a entrega..." value={manuFeed} onChange={e => setManuFeed(e.target.value)} style={{padding: 16}} />
                   </div>
                 </div>
 
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: 32, display: 'flex', justifyContent: 'flex-end', gap: 16 }}>
                   <button className="btn-ghost" style={{padding: '0 24px'}} onClick={() => setView('dashboard')}>Cancelar</button>
-                  <button className="btn-primary" style={{ padding: '0 40px', height: 48 }} disabled={saving} onClick={handleManualSave}>
-                    {saving ? <RefreshCw className="spin" size={18}/> : <Check size={18}/>}
+                  <button className="btn-primary" style={{ padding: '0 40px', height: 48 }} disabled={manuSaving} onClick={handleManualSave}>
+                    {manuSaving ? <RefreshCw className="spin" size={18}/> : <Check size={18}/>}
                     Confirmar Lançamento
                   </button>
                 </div>
               </div>
             </div>
           );
-        })}
+        })()}
 
         {/* â•â• LANÇAMENTO (COPIA E COLA) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         {/* ── COPIA DE ATIVIDADES ─────────────────────────────────────────────────── */}
