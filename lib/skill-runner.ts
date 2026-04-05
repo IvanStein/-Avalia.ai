@@ -33,7 +33,7 @@ ${p.student_text}
 ## 3. Instruções de Correção:
 - Avalie de 0 a 10 com uma casa decimal baseando-se no Contexto Pedagógico.
 - Escreva EXATAMENTE 1 parágrafo denso e fluido. 
-- HUMANIZAÇÃO: Comece o feedback tratando o aluno pelo nome de forma natural (ex: "${p.student_name}, sua abordagem...").
+- HUMANIZAÇÃO: Jamais mencione o nome do aluno em qualquer parte do feedback. Comece de forma direta, sem cumprimentos nominais (ex: "Notei que você focou em...", "Sua análise demonstra...", "O ponto central do seu texto...").
 - TOM DE VOZ: Não use frases robóticas como "Este trabalho demonstra" ou "A análise apresenta". Use uma linguagem de professor: "Notei que você focou em...", "Senti falta de um maior detalhamento em...", "O ponto que você trouxe sobre... é muito pertinente".
 - ESTRUTURA: Integre em um único texto: resumo do que foi entregue + pontos fortes + pontos que precisam de atenção para o crescimento do aluno.
 - Seja o mais específico possível sobre o conteúdo do aluno para que ele sinta que você realmente leu o trabalho.
@@ -67,6 +67,7 @@ ${p.student_answers}
 - Compare cada resposta com o gabarito
 - Calcule a nota proporcional (acertos / total * 10)
 - Para cada erro, explique brevemente o conceito correto
+- JAMAIAS mencione o nome do aluno no feedback (resumo do desempenho).
 
 Responda SOMENTE em JSON:
 {
@@ -98,6 +99,7 @@ Nota: ${p.grade}
 Pontos fracos: ${p.improvements}
 
 ## Instruções:
+- JAMAIAS mencione o nome do aluno em qualquer parte do texto.
 - Tom encorajador e construtivo
 - Compare com desempenho anterior (melhoria ou queda)
 - Sugira recursos específicos para os pontos fracos

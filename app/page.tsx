@@ -1583,10 +1583,23 @@ export default function Dashboard() {
             navigator.clipboard.writeText(text);
           };
 
-          const getSummary = (text: string = '') => {
+          const cleanFeedback = (text: string = '') => {
             if (!text) return '';
-            const sentences = text.replace(/Atividade: .*\n/, '').split(/[.!?]\s/);
-            if (sentences.length <= 2) return text;
+            let clean = text.replace(/Atividade: .*\n/, '');
+            // Best effort to remove name prefixes like "Nome, ..." or "Nome. ..."
+            if (activeSub?.studentName) {
+              const nameParts = activeSub.studentName.split(' ');
+              const firstName = nameParts[0];
+              const namePattern = new RegExp(`^(${activeSub.studentName}|${firstName})[,.:!]?\\s*`, 'i');
+              clean = clean.replace(namePattern, '');
+            }
+            return clean.charAt(0).toUpperCase() + clean.slice(1);
+          };
+
+          const getSummary = (text: string = '') => {
+            const clean = cleanFeedback(text);
+            const sentences = clean.split(/[.!?]\s/);
+            if (sentences.length <= 2) return clean;
             return sentences.slice(0, 2).join('. ') + '.';
           };
 
@@ -1706,7 +1719,7 @@ export default function Dashboard() {
                             </button>
                           </div>
                           <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: 16, fontSize: 13, color: 'var(--text2)', maxHeight: 200, overflow: 'auto', border: '1px solid var(--border)', whiteSpace: 'pre-wrap' }}>
-                            {activeSub.feedback}
+                            {cleanFeedback(activeSub.feedback)}
                           </div>
                         </div>
                       </>
@@ -2473,8 +2486,8 @@ export default function Dashboard() {
             <input className="input" value={newActData.title} onChange={e => setNewActData({...newActData, title: e.target.value})}/>
             <label className="field-label">Peso</label>
             <input className="input" type="number" step="0.1" value={newActData.weight} onChange={e => setNewActData({...newActData, weight: parseFloat(e.target.value)})}/>
-            <label className="field-label">Critérios IA</label>
-            <textarea className="textarea" placeholder="Descreva os critérios..." value={newActData.description} onChange={e => setNewActData({...newActData, description: e.target.value})}/>
+            <label className="field-label">Diretrizes Pedagógicas</label>
+            <textarea className="textarea" placeholder="Descreva os critérios de avaliação e o estilo esperado..." value={newActData.description} onChange={e => setNewActData({...newActData, description: e.target.value})}/>
             <div className="modal-actions">
               <button className="btn-ghost" onClick={() => setShowActivityModal(false)}>Cancelar</button>
               <button className="btn-primary" onClick={saveActivity}>Salvar</button>
