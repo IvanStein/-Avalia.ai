@@ -16,12 +16,12 @@ const PROMPTS: SkillPrompts = {
     model: "gemini-2.5-flash-lite",
     responseType: "json",
     prompt: (p) => `
-Você é um professor universitário experiente corrigindo um trabalho acadêmico.
+Você é um professor universitário sênior corrigindo um trabalho acadêmico. Sua linguagem deve ser humana, direta e empática, simulando uma correção feita manualmente por você.
 
 ## 1. Contexto Pedagógico
 - Matéria: ${p.subject}
 - Ementa da Matéria: ${p.syllabus || "Não fornecida"}
-- Descritivo da Atividade: ${p.activity_description || "Não fornecido"}
+- Descritivo da Atividade (FOCO DA CORREÇÃO): ${p.activity_description || "Não fornecido"}
 - Critérios de Avaliação (Padrões definidos):
 ${p.rag_context}
 
@@ -31,9 +31,12 @@ ${p.rag_context}
 ${p.student_text}
 
 ## 3. Instruções de Correção:
-- Avalie de 0 a 10 com uma casa decimal baseando-se rigorosamente no Contexto Pedagógico.
-- Escreva EXATAMENTE 1 parágrafo denso e bem estruturado contendo: Um resumo do entregável, os pontos fortes e os pontos de melhoria. Seja objetivo, encorajador e específico.
-- Avalie as métricas base.
+- Avalie de 0 a 10 com uma casa decimal baseando-se no Contexto Pedagógico.
+- Escreva EXATAMENTE 1 parágrafo denso e fluido. 
+- HUMANIZAÇÃO: Comece o feedback tratando o aluno pelo nome de forma natural (ex: "${p.student_name}, sua abordagem...").
+- TOM DE VOZ: Não use frases robóticas como "Este trabalho demonstra" ou "A análise apresenta". Use uma linguagem de professor: "Notei que você focou em...", "Senti falta de um maior detalhamento em...", "O ponto que você trouxe sobre... é muito pertinente".
+- ESTRUTURA: Integre em um único texto: resumo do que foi entregue + pontos fortes + pontos que precisam de atenção para o crescimento do aluno.
+- Seja o mais específico possível sobre o conteúdo do aluno para que ele sinta que você realmente leu o trabalho.
 
 Responda SOMENTE em JSON:
 {
@@ -201,9 +204,12 @@ Abaixo está uma lista (JSON) contendo o nome do aluno e seu respectivo trabalho
 ${JSON.stringify(p.students_works)}
 
 ## 3. Instruções de Correção
-Para CADA aluno, analise o trabalho com base no Contexto Pedagógico e retorne a correção.
+Para CADA aluno, analise o trabalho com base no Contexto Pedagógico.
 - Dê uma nota final (0.0 a 10.0).
-- Escreva EXATAMENTE 1 parágrafo denso contendo: Um breve resumo do que o aluno entregou, os pontos fortes do trabalho e onde ele precisa melhorar. Seja objetivo mas encorajador.
+- Escreva EXATAMENTE 1 parágrafo denso e humano.
+- ADOTE SUA PERSONA: Você é o professor. Dirija-se ao aluno pelo nome (contido no JSON).
+- EVITE ROBOTISMO: Não use estruturas fixas ou impessoais. Varie o início das frases. Use termos como "Percebi que você...", "Excelente escolha de referências...", "Arthur, sua análise sobre...".
+- CONTEÚDO: O parágrafo deve conter um breve resumo do entregável, elogios aos pontos fortes e orientações claras sobre o que pode ser melhorado pedagógicamente.
 
 Retorne SOMENTE um JSON válido com a seguinte estrutura:
 {

@@ -929,7 +929,7 @@ export default function Dashboard() {
           </h2>
           
           <div className="fade-in" style={{display:'flex', flexDirection:'column', gap:28}}>
-            {dbData.subjects.filter(sub => dbData.submissions.some(s => s.subject === sub.name)).sort((a,b) => a.name.localeCompare(b.name)).map(subject => {
+            {dbData.subjects.filter(sub => dbData.submissions.some(s => s.subject === sub.name)).sort((a,b) => b.name.localeCompare(a.name)).map(subject => {
               const subjectSubs = dbData.submissions.filter(s => s.subject === subject.name);
               const isSubExpanded = !!expandedSubjects[subject.id];
               
@@ -968,7 +968,7 @@ export default function Dashboard() {
                   
                   {isSubExpanded && (
                     <div style={{padding:'10px 20px 20px'}}>
-                      {Object.entries(activityGroups).map(([actTitle, subs]) => {
+                      {Object.entries(activityGroups).sort((a,b) => b[0].localeCompare(a[0])).map(([actTitle, subs]) => {
                         const actId = `${subject.id}-${actTitle}`;
                         const isActExpanded = !!expandedActivities[actId];
                         return (
