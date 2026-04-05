@@ -19,7 +19,20 @@
   --radius: 12px;
 }
 
-body { background: var(--bg); color: var(--text); font-family: 'Sora', sans-serif; }
+[data-theme='light'] {
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface2: #f1f5f9;
+  --surface3: #e2e8f0;
+  --border: #e2e8f0;
+  --border2: #cbd5e1;
+  --text: #0f172a;
+  --text2: #64748b;
+  --accent: #6366f1;
+  --accent2: #4f46e5;
+}
+
+body { background: var(--bg); color: var(--text); font-family: 'Sora', sans-serif; transition: background .3s, color .3s; }
 
 /* ── LAYOUT ─────────────────────────────────────────────────────────────── */
 .app { display: flex; min-height: 100vh; }
@@ -192,3 +205,7 @@ select.input option { background: var(--surface2); }
 .priority-alta   { color: var(--red); }
 .priority-media  { color: var(--yellow); }
 .priority-baixa  { color: var(--text2); }
+ 
+ .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; transition: all .15s; }
+ .card-hover:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 4px 20px #0002; }
+ [data-theme='light'] .card-hover:hover { box-shadow: 0 4px 20px #6366f115; }

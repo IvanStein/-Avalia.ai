@@ -13,7 +13,7 @@ interface Subject       { id: string; name: string; code: string; syllabus?: str
 interface Student       { id: string; name: string; email: string; ra?: string; turma?: string; subjectIds?: string[]; }
 interface Activity      { id: string; subjectId: string; title: string; weight: number; description?: string; }
 interface Implementacao { id: string; title: string; description: string; status: string; priority: string; createdAt: string; category?: string; imageUrl?: string; }
-interface AppConfig     { system_name: string; primary_color: string; institution?: string; professor?: string; }
+interface AppConfig     { system_name: string; primary_color: string; theme?: 'light' | 'dark'; institution?: string; professor?: string; }
 interface Turma         { id: string; name: string; studentIds: string[]; }
 interface Implementacao { id: string; title: string; description: string; status: string; priority: string; createdAt: string; }
 interface Submission    { id: string; studentName: string; subject: string; submittedAt: string; status: 'pending'|'grading'|'graded'|'error'; grade?: number; feedback?: string; source: 'pdf'|'drive'; }
@@ -62,7 +62,7 @@ const PRIORITY_CONFIG: Record<string, { label: string; cls: string }> = {
 
 const EMPTY_DB: DBData = { 
   subjects: [], students: [], activities: [], implementacoes: [], submissions: [], 
-  configs: { system_name: 'Avalia.ai', primary_color: '#6366f1' } 
+  configs: { system_name: 'Avalia.ai', primary_color: '#6366f1', theme: 'dark' } 
 };
 
 // â”€â”€ HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -208,6 +208,22 @@ export default function Dashboard() {
 
   useEffect(() => { setHasMounted(true); }, []);
   useEffect(() => { if (hasMounted) fetchDB(); }, [dbMode, hasMounted]);
+
+  // Apply theme to DOM
+  useEffect(() => {
+    if (dbData.configs?.theme) {
+      document.documentElement.setAttribute('data-theme', dbData.configs.theme);
+    }
+  }, [dbData.configs?.theme]);
+
+  useEffect(() => {
+    // Dynamic Accent Color
+    if (dbData.configs?.primary_color) {
+      document.documentElement.style.setProperty('--accent', dbData.configs.primary_color);
+      // Generate a slightly lighter version for accent2 if it is not provided
+      // For now we just use the same or let the CSS handle it
+    }
+  }, [dbData.configs?.primary_color]);
 
   // â”€â”€ GENERIC CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const apiPost = async (entity: string, data: any) => {
@@ -2001,7 +2017,14 @@ export default function Dashboard() {
                     <input className="input" value={tempConfigs.system_name} onChange={e => setTempConfigs({...tempConfigs, system_name: e.target.value})}/>
                   </div>
                   <div>
-                    <label className="field-label">Cor Principal</label>
+                    <label className="field-label">Tema Visual</label>
+                    <div className="toggle-group">
+                      <button className={tempConfigs.theme === 'light' ? 'active' : ''} onClick={() => setTempConfigs({...tempConfigs, theme: 'light'})}>Claro</button>
+                      <button className={tempConfigs.theme !== 'light' ? 'active' : ''} onClick={() => setTempConfigs({...tempConfigs, theme: 'dark'})}>Escuro</button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="field-label">Cor Principal (Acento)</label>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                       <input type="color" className="input" style={{ width: 44, height: 40, padding: 4 }} value={tempConfigs.primary_color} onChange={e => setTempConfigs({...tempConfigs, primary_color: e.target.value})}/>
                       <code style={{ fontSize: 10, color: 'var(--text2)' }}>{tempConfigs.primary_color.toUpperCase()}</code>
