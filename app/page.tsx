@@ -1789,7 +1789,7 @@ export default function Dashboard() {
               if (!stu || !sub) throw new Error('Dados inválidos');
 
               const activityPrefix = act ? `Atividade: ${act.title}\n` : '';
-              await apiPost('submissions', {
+              await apiPost('submission', {
                 studentName: stu.name,
                 subject: sub.name,
                 status: "graded",
