@@ -195,8 +195,18 @@ export default function Dashboard() {
     if (reportType === 'activity' && !reportActivityId) return null;
     const sub = dbData.subjects.find(s => s.id === reportSubjectId);
     if (reportType === 'subject') {
-      const acts = dbData.activities.filter(a => a.subjectId === reportSubjectId);
-      const head = ['Aluno', ...acts.flatMap(a => [`${a.title} (N)`, `${a.title} (F)`]), 'Média', 'Faltas'];
+      const allActs = dbData.activities.filter(a => a.subjectId === reportSubjectId);
+      // Filter: Only show activities with at least one evaluation
+      const acts = allActs.filter(a => dbData.submissions.some(subm => 
+        subm.subject === sub?.name && subm.status === 'graded' &&
+        (getActName(subm.feedback || '') === a.title)
+      ));
+
+      const head = ['Aluno', ...acts.flatMap(a => {
+          const short = a.title.match(/A\.A \d+/i)?.[0] || a.title;
+          return [`${short}`, `${short} Faltas`];
+      }), 'Média', 'Total Faltas'];
+
       const body = dbData.students
         .filter(s => (s.subjectIds || []).includes(reportSubjectId))
         .sort((a,b) => a.name.localeCompare(b.name))
@@ -1711,22 +1721,35 @@ export default function Dashboard() {
                       <tbody>
                         {reportPreviewData.body.map((row, i) => (
                           <tr key={i}>
-                            {row.map((cell, j) => (
-                              <td key={j} style={{ 
-                                padding: '10px 16px',
-                                borderBottom: '1px solid var(--border)',
-                                fontWeight: j === 0 ? 600 : 400,
-                                color: j === 0 ? 'var(--text1)' : 'var(--text2)',
-                              }}>
-                                {j === 3 && !reportPreviewData.isMatrix ? (
-                                  <div style={{ maxWidth: 400, maxHeight: 40, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                                    {cell}
-                                  </div>
-                                ) : (
-                                  cell
-                                )}
-                              </td>
-                            ))}
+                            {row.map((cell, j) => {
+                              const isMatrixGrade = reportPreviewData.isMatrix && (j > 0 && j < (reportPreviewData.head.length - 2) && j % 2 !== 0);
+                              const isMatrixAvg = reportPreviewData.isMatrix && j === (reportPreviewData.head.length - 2);
+                              const isActivityGrade = !reportPreviewData.isMatrix && j === 1;
+                              const isAnyGradeCol = isMatrixGrade || isMatrixAvg || isActivityGrade;
+                              
+                              let customColor = (j === 0 ? 'var(--text1)' : 'var(--text2)');
+                              if (isAnyGradeCol) {
+                                const val = parseFloat(cell);
+                                customColor = val > 7 ? '#3b82f6' : '#ef4444';
+                              }
+
+                              return (
+                                <td key={j} style={{ 
+                                  padding: '10px 16px',
+                                  borderBottom: '1px solid var(--border)',
+                                  fontWeight: (j === 0 || isAnyGradeCol) ? 600 : 400,
+                                  color: customColor,
+                                }}>
+                                  {j === 3 && !reportPreviewData.isMatrix ? (
+                                    <div style={{ maxWidth: 400, maxHeight: 40, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                                      {cell}
+                                    </div>
+                                  ) : (
+                                    cell
+                                  )}
+                                </td>
+                              );
+                            })}
                           </tr>
                         ))}
                       </tbody>
