@@ -13,7 +13,7 @@ interface Subject       { id: string; name: string; code: string; syllabus?: str
 interface Student       { id: string; name: string; email: string; ra?: string; turma?: string; subjectIds?: string[]; }
 interface Activity      { id: string; subjectId: string; title: string; weight: number; description?: string; }
 interface Implementacao { id: string; title: string; description: string; status: string; priority: string; createdAt: string; category?: string; imageUrl?: string; }
-interface AppConfig     { system_name: string; primary_color: string; theme?: 'light' | 'dark'; institution?: string; professor?: string; }
+interface AppConfig     { system_name: string; primary_color: string; theme?: 'light' | 'dark'; institution?: string; professor?: string; pedagogical_style?: string; }
 interface Turma         { id: string; name: string; studentIds: string[]; }
 interface Implementacao { id: string; title: string; description: string; status: string; priority: string; createdAt: string; }
 interface Submission    { id: string; studentName: string; subject: string; submittedAt: string; status: 'pending'|'grading'|'graded'|'error'; grade?: number; feedback?: string; source: 'pdf'|'drive'; }
@@ -935,8 +935,9 @@ export default function Dashboard() {
               
               // Group submissions of this subject by activity
               const activityGroups = subjectSubs.reduce((acc, sub) => {
-                const actName = sub.feedback?.split('\n')[0]?.includes('Atividade:') 
-                  ? sub.feedback.split('\n')[0].replace('Atividade:', '').trim() 
+                const firstLine = sub.feedback?.split('\n')[0] || '';
+                const actName = firstLine.includes('Atividade:') 
+                  ? firstLine.replace('Atividade:', '').trim() 
                   : 'Geral';
                 if (!acc[actName]) acc[actName] = [];
                 acc[actName].push(sub);
@@ -968,7 +969,9 @@ export default function Dashboard() {
                   
                   {isSubExpanded && (
                     <div style={{padding:'10px 20px 20px'}}>
-                      {Object.entries(activityGroups).sort((a,b) => b[0].localeCompare(a[0])).map(([actTitle, subs]) => {
+                      {Object.entries(activityGroups)
+                        .sort((a, b) => b[0].localeCompare(a[0], undefined, { numeric: true, sensitivity: 'base' }))
+                        .map(([actTitle, subs]) => {
                         const actId = `${subject.id}-${actTitle}`;
                         const isActExpanded = !!expandedActivities[actId];
                         return (
@@ -2027,6 +2030,18 @@ export default function Dashboard() {
                 <div style={{ marginBottom: 20 }}>
                   <label className="field-label">Nome do Professor</label>
                   <input className="input" placeholder="Seu Nome completo" value={tempConfigs.professor || ''} onChange={e => setTempConfigs({...tempConfigs, professor: e.target.value})}/>
+                </div>
+
+                <div style={{ marginBottom: 20 }}>
+                  <label className="field-label">Estilo Pedagógico (O que a IA deve aprender com você?)</label>
+                  <textarea 
+                    className="input" 
+                    rows={4}
+                    placeholder="Ex: 'Seja rigoroso com a gramática', 'Foque em citações ABNT', 'Use um tom mais informal e próximo', 'Não dê notas acima de 9 sem mérito excepcional'..." 
+                    value={tempConfigs.pedagogical_style || ''} 
+                    onChange={e => setTempConfigs({...tempConfigs, pedagogical_style: e.target.value})}
+                    style={{ resize: 'vertical' }}
+                  />
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
