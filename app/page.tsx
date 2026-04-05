@@ -16,7 +16,7 @@ interface Implementacao { id: string; title: string; description: string; status
 interface AppConfig     { system_name: string; primary_color: string; theme?: 'light' | 'dark'; institution?: string; professor?: string; pedagogical_style?: string; }
 interface Turma         { id: string; name: string; studentIds: string[]; }
 interface Implementacao { id: string; title: string; description: string; status: string; priority: string; createdAt: string; }
-interface Submission    { id: string; studentName: string; subject: string; submittedAt: string; status: 'pending'|'grading'|'graded'|'error'; grade?: number; feedback?: string; source: 'pdf'|'drive'; }
+interface Submission    { id: string; studentName: string; subject: string; submittedAt: string; status: 'pending'|'grading'|'graded'|'error'|'audit_pending'|'audited'; grade?: number; feedback?: string; source: 'pdf'|'drive'; auditNotes?: string; }
 
 interface BatchEntry {
   id: string;
@@ -41,10 +41,12 @@ interface DBData {
 }
 
 const STATUS_CONFIG = {
-  pending:  { label: 'Aguardando',    icon: Clock,        color: '#f59e0b' },
-  grading:  { label: 'Corrigindo...', icon: Sparkles,     color: '#6366f1' },
-  graded:   { label: 'Corrigido',     icon: CheckCircle,  color: '#10b981' },
-  error:    { label: 'Erro',          icon: AlertCircle,  color: '#ef4444' },
+  pending:       { label: 'Aguardando',    icon: Clock,        color: '#f59e0b' },
+  grading:       { label: 'Corrigindo...', icon: Sparkles,     color: '#6366f1' },
+  graded:        { label: 'Corrigido',     icon: CheckCircle,  color: '#10b981' },
+  error:         { label: 'Erro',          icon: AlertCircle,  color: '#ef4444' },
+  audit_pending: { label: 'Em Auditoria',  icon: AlertCircle,  color: '#f59e0b' },
+  audited:       { label: 'Auditado',      icon: CheckCircle,  color: '#10b981' },
 };
 
 const IMPL_STATUS: Record<string, { label: string; color: string }> = {
@@ -114,7 +116,8 @@ function cleanFilenameForName(filename: string) {
 
 function getActName(feedback: string) {
   const fl = (feedback ?? '').split('\n')[0];
-  return fl.includes('Atividade:') ? fl.replace('Atividade:', '').trim() : null;
+  if (!fl.toLowerCase().includes('atividade:')) return null;
+  return fl.split(/atividade:/i)[1].trim();
 }
 
 function syllabusChunks(raw: string): string[] {
@@ -123,7 +126,7 @@ function syllabusChunks(raw: string): string[] {
 
 // â”€â”€ COMPONENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function Dashboard() {
-  type View = 'dashboard'|'subjects'|'students'|'enrollment'|'activities'|'batch'|'implementacoes'|'settings'|'copy'|'reports'|'student-profile'|'manual'|'canvas';
+  type View = 'dashboard'|'subjects'|'students'|'enrollment'|'activities'|'batch'|'implementacoes'|'settings'|'copy'|'reports'|'student-profile'|'manual'|'canvas'|'audit';
   const [view, setView] = useState<View>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
@@ -847,6 +850,35 @@ export default function Dashboard() {
 
   if (!hasMounted) return null;
 
+  const generateAuditReport = () => {
+    const audited = dbData.submissions.filter(s => s.status === 'audited');
+    if (audited.length === 0) return alert('Nenhum caso auditado para relatório.');
+    let csv = "\ufeffAluno;Materia;Nota;Feedback IA;Observações Auditoria;Data\n";
+    audited.forEach(s => {
+      csv += `"${s.studentName}";"${s.subject}";"${s.grade}";"${(s.feedback || '').replace(/"/g,'""')}";"${(s.auditNotes || '').replace(/"/g,'""')}";"${s.submittedAt}"\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `Relatónio_Auditoria_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
+  const sendToAudit = async (id: string) => {
+    if (id.startsWith('missing-')) {
+       alert('Não é possível auditar um aluno que não realizou a entrega.');
+       return;
+    }
+    try {
+       await apiPost('submission-update', { id, status: 'audit_pending' });
+       alert('Enviado para auditoria! Você poderá analisar os casos na tela de Auditoria.');
+       await fetchDB();
+    } catch (e: any) {
+       alert('Erro: ' + e.message);
+    }
+  };
+
   // â”€â”€ NAV â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const NavItem = ({ v, icon: Icon, label }: { v: View; icon: any; label: string }) => (
     <button className={`nav-item ${view === v ? 'active' : ''}`} onClick={() => setView(v)}>
@@ -876,6 +908,7 @@ export default function Dashboard() {
           <NavItem v="batch"          icon={Layers}      label="Correção"/>
           <NavItem v="manual"         icon={Edit2}       label="Lançamento Manual"/>
           <NavItem v="canvas"         icon={Copy}        label="Assistente Canvas"/>
+          <NavItem v="audit"          icon={AlertCircle} label="Auditoria"/>
           <NavItem v="copy"           icon={Layers}      label="Copia de Atividades"/>
           <NavItem v="reports"        icon={BarChart2}   label="Relatórios"/>
           <p className="nav-label">Sistema</p>
@@ -1560,7 +1593,7 @@ export default function Dashboard() {
                const realSub = dbData.submissions.find(s => 
                  s.studentName === stu.name && 
                  s.subject === subject?.name && 
-                 (canvActTitle === '' || getActName(s.feedback || '') === canvActTitle)
+                 (canvActTitle ? getActName(s.feedback || '') === canvActTitle : !getActName(s.feedback || ''))
                );
 
                if (realSub) return { ...realSub, isMissing: false };
@@ -1569,8 +1602,8 @@ export default function Dashboard() {
                  id: `missing-${stu.id}`,
                  studentName: stu.name,
                  subject: subject?.name || 'Não informada',
-                 grade: 0,
-                 feedback: "Nota 0 e duas faltas",
+                 grade: 0.0,
+                 feedback: canvActTitle ? "Nota 0 e duas faltas" : "Nenhuma avaliação geral encontrada",
                  isMissing: true,
                  status: 'graded' as const
                };
@@ -1607,6 +1640,9 @@ export default function Dashboard() {
             <div className="fade-in">
               <header className="header">
                 <div><h1>Assistente de Lançamento (Canvas)</h1><p className="subtitle">Facilite o "copia e cola" para o SpeedGrader</p></div>
+                <button className="btn-ghost" onClick={fetchDB} disabled={loading}>
+                  <RefreshCw size={16} className={loading ? 'spin' : ''}/> Atualizar Avaliações
+                </button>
               </header>
 
               <div className="card" style={{ padding: 20, marginBottom: 20 }}>
@@ -1694,6 +1730,12 @@ export default function Dashboard() {
                                <Copy size={20}/> Copiar Nota: <b>{activeSub.grade?.toFixed(1)}</b>
                              </button>
                              <p style={{ fontSize: 10, color: 'var(--text2)' }}>Clique para copiar e cole no Canvas</p>
+                             
+                             {!activeSub.isMissing && (
+                               <button className="btn-ghost" style={{ marginTop: 12, fontSize: 11, height: 'auto', padding: '6px 12px' }} onClick={() => sendToAudit(activeSub.id)}>
+                                 <AlertCircle size={14}/> Solicitar Auditoria
+                               </button>
+                             )}
                           </div>
 
                           {/* Column 2: Feedback Summary Action */}
@@ -2114,6 +2156,121 @@ export default function Dashboard() {
             )}
           </div>
         )}
+
+        {/* ── AUDITORIA PEDAGÓGICA ────────────────────────────────────────────────── */}
+        {view === 'audit' && (() => {
+          const auditList = dbData.submissions.filter(s => s.status === 'audit_pending').sort((a,b) => b.submittedAt.localeCompare(a.submittedAt));
+          const activeAudit = auditList.find(s => s.id === auditSubId) || auditList[0];
+
+          const saveAudit = async (finish: boolean) => {
+            if (!activeAudit) return;
+            try {
+              await apiPost('submission-update', { 
+                id: activeAudit.id, 
+                auditNotes: auditNote,
+                status: finish ? 'audited' : 'audit_pending'
+              });
+              alert(finish ? 'Auditoria finalizada! O caso agora serve como referência pedagógica.' : 'Observação salva com sucesso.');
+              fetchDB();
+              if (finish) setAuditSubId(null);
+            } catch (e: any) { alert(e.message); }
+          };
+
+          return (
+            <div className="fade-in">
+              <header className="header">
+                 <div><h1>Auditoria Pedagógica</h1><p className="subtitle">Análise detalhada e calibração da IA</p></div>
+                 <div className="header-actions">
+                   <button className="btn-ghost" onClick={() => generateAuditReport()}>
+                     <FileText size={16}/> Gerar Histórico de Auditoria
+                   </button>
+                 </div>
+              </header>
+
+              {auditList.length === 0 ? (
+                <div className="empty-state" style={{ height: 400 }}>
+                  <CheckCircle size={48} color="var(--blue)"/>
+                  <h3 style={{marginTop:16}}>Fila de Auditoria Vazia</h3>
+                  <p>Os casos que você marcar para revisão aparecerão aqui.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 350px) 1fr', gap: 24, height: 'calc(100vh - 250px)' }}>
+                  {/* List */}
+                  <div className="card" style={{ padding: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ padding: '12px 16px', background: 'var(--surface2)', fontSize: 11, fontWeight: 700, color: 'var(--text2)', borderBottom: '1px solid var(--border)', textTransform:'uppercase' }}>
+                      Pilha de Trabalho ({auditList.length})
+                    </div>
+                    {auditList.map(s => {
+                       const isActive = activeAudit?.id === s.id;
+                       return (
+                        <div key={s.id} onClick={() => { setAuditSubId(s.id); setAuditNote(s.auditNotes || ''); }}
+                          style={{ padding: 16, cursor: 'pointer', borderBottom: '1px solid var(--border)', background: isActive ? 'var(--accent)10' : 'transparent', borderLeft: isActive ? '4px solid var(--accent)' : '4px solid transparent' }}>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: isActive ? 'var(--accent)' : 'var(--text1)' }}>{s.studentName}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 4 }}>{s.subject}</div>
+                          <div style={{ marginTop: 8, fontSize: 10, display: 'flex', gap: 8 }}>
+                             <span className="badge">Nota IA: {s.grade}</span>
+                             <span className="badge" style={{ background: '#f59e0b20', color: '#f59e0b' }}>Aguardando</span>
+                          </div>
+                        </div>
+                       );
+                    })}
+                  </div>
+
+                  {/* Editor Area */}
+                  <div className="card" style={{ padding: 0, display: 'flex', flexDirection: 'column', background: 'var(--surface2)30', overflow: 'hidden' }}>
+                    {!activeAudit ? <div className="empty-state"><p>Selecione um caso para iniciar</p></div> : (
+                      <>
+                        <div style={{ padding: 32, borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                             <div>
+                               <h2 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text)' }}>Análise de {activeAudit.studentName}</h2>
+                               <p style={{ color: 'var(--accent)', fontSize: 13, fontWeight: 600 }}>{activeAudit.subject} • {getActName(activeAudit.feedback || '') || 'Geral'}</p>
+                               <p style={{ color: 'var(--text2)', fontSize: 11, marginTop: 4 }}>Caso enviado em {activeAudit.submittedAt}</p>
+                             </div>
+                             <div style={{ textAlign: 'right' }}>
+                               <p style={{fontSize:10, color:'var(--text2)', textTransform:'uppercase'}}>Nota IA</p>
+                               <div style={{ fontSize: 42, fontWeight: 900, color: 'var(--accent)', lineHeight:1 }}>{activeAudit.grade}</div>
+                             </div>
+                          </div>
+                        </div>
+
+                        <div style={{ padding: 32, overflow: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 32 }}>
+                          <div>
+                             <h4 style={{ fontSize: 12, textTransform: 'uppercase', color: 'var(--text2)', marginBottom: 12, fontWeight: 700 }}>Texto do Aluno / Feedback IA</h4>
+                             <div style={{ fontSize: 14, lineHeight: 1.6, padding: 20, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, whiteSpace: 'pre-wrap' }}>
+                               {activeAudit.feedback}
+                             </div>
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                             <h4 style={{ fontSize: 12, textTransform: 'uppercase', color: 'var(--accent)', fontWeight: 700 }}>Parecer de Auditoria (Professor)</h4>
+                             <p style={{ fontSize: 11, color: 'var(--text2)' }}>Indique pontos de melhoria na correção. Suas notas serão usadas para calibrar futuras avaliações deste estilo.</p>
+                             <textarea 
+                               className="textarea" 
+                               style={{ minHeight: 180, fontSize: 14, borderRadius: 12, padding: 20 }} 
+                               placeholder="Ex: A IA foi excessivamente técnica. Sugiro um feedback mais encorajador e focado no ponto X..."
+                               value={auditNote} 
+                               onChange={e => setAuditNote(e.target.value)} 
+                             />
+                          </div>
+                        </div>
+
+                        <div style={{ padding: 24, background: 'var(--surface)', borderTop: '1px solid var(--border)', display: 'flex', gap: 16, alignItems: 'center' }}>
+                           <button className="btn-primary" style={{ flex: 1, height: 56, fontSize: 15 }} onClick={() => saveAudit(true)}>
+                             <Check size={20}/> Aprovar e Finalizar Auditoria
+                           </button>
+                           <button className="btn-ghost" style={{ height: 56, padding: '0 24px' }} onClick={() => saveAudit(false)}>
+                             <RefreshCw size={20}/> Salvar Apenas Rascunho
+                           </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* â• â•  STUDENT PROFILE â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â•  */}
         {view === 'student-profile' && selectedStudentId && (() => {

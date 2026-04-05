@@ -36,18 +36,27 @@ async function gradeOne(
   mode: "local" | "remote"
 ): Promise<{ ok: true; submission: any } | { ok: false; studentName: string; error: string }> {
   try {
-    const [subDetails, actDetails, configDetails, lastSubmissions] = await Promise.all([
+    const [subDetails, actDetails, configDetails, lastSubmissions, auditedSubmissions] = await Promise.all([
       db.getSubjectByName(item.subject, mode),
       item.activity ? db.getActivityByTitle(item.activity, mode) : Promise.resolve(null),
       db.getConfigs(mode),
       db.getSubmissions(mode).then(subs => 
         subs.filter(s => s.subject === item.subject && s.status === 'graded' && s.feedback?.includes(`Atividade: ${item.activity}`))
             .slice(-2)
+      ),
+      // Fetch audited submissions to serve as negative/calibration examples
+      db.getSubmissions(mode).then(subs => 
+        subs.filter(s => s.status === 'audited' && !!s.auditNotes)
+            .slice(-3)
       )
     ]);
 
+    const auditContext = auditedSubmissions.length > 0
+      ? `\n## DIRETRIZES DE AUDITORIA (NãO REPETIR ESTES ERROS):\n${auditedSubmissions.map(s => `- Feedback anterior PROBLEMÁTCO: ${s.feedback}\n- ORIENTAÇÃO DO PROFESSOR: ${s.auditNotes}`).join('\n\n')}`
+      : '';
+
     const examplesContext = lastSubmissions.length > 0 
-      ? `\n## Exemplos de Referência (Correções anteriores desta atividade):\n${lastSubmissions.map(s => `- Nota: ${s.grade}\n- Feedback: ${s.feedback}`).join('\n\n')}`
+      ? `\n## Exemplos de Referência (Correções Aprovadas):\n${lastSubmissions.map(s => `- Nota: ${s.grade}\n- Feedback: ${s.feedback}`).join('\n\n')}`
       : '';
 
     const pedagogicalContext = `
@@ -55,7 +64,8 @@ async function gradeOne(
 - Matéria: ${item.subject}
 - Ementa da Matéria: ${subDetails?.syllabus || "Não fornecida"}
 - Descritivo da Atividade (CONCENTRE-SE AQUI): ${(actDetails as any)?.description || "Não fornecido"}
-- PREFERÊNCIAS DO PROFESSOR (ESTILO): ${configDetails.pedagogical_style || "Não fornecido"}
+- ESTILO DO PROFESSOR: ${configDetails.pedagogical_style || "Não fornecido"}
+${auditContext}
 ${examplesContext}
 
 ## 2. Padrões Adicionais de Avaliação (RAG):

@@ -16,10 +16,14 @@ export async function POST(req: NextRequest) {
     const driveUrl = formData.get("driveUrl") as string | null;
     const file = formData.get("file") as File | null;
 
-    // 1. Contexto Pedagógico — usa ementa em chunks + critérios da atividade
-    const [subDetails, actDetails] = await Promise.all([
+    // 1. Contexto Pedagógico — usa ementa em chunks + critérios da atividade + Auditoria
+    const [subDetails, actDetails, auditedSubs, configDetails] = await Promise.all([
       db.getSubjectByName(subject, mode),
-      db.getActivityByTitle(activityTitle, mode)
+      db.getActivityByTitle(activityTitle, mode),
+      db.getSubmissions(mode).then(subs => 
+        subs.filter(s => s.status === 'audited' && !!s.auditNotes).slice(-3)
+      ),
+      db.getConfigs(mode)
     ]);
 
     // Parse syllabus chunks (store as JSON array) — use first 3 chunks as context
@@ -30,13 +34,20 @@ export async function POST(req: NextRequest) {
       syllabusContext = chunks.slice(0, 3).join('\n---\n');
     } catch { syllabusContext = subDetails?.syllabus ?? ''; }
 
+    const auditContext = auditedSubs.length > 0
+      ? `\n## DIRETRIZES DE AUDITORIA (NãO REPETIR ESTES ERROS):\n${auditedSubs.map(s => `- Feedback anterior PROBLEMÁTCO: ${s.feedback}\n- ORIENTAÇÃO DO PROFESSOR: ${s.auditNotes}`).join('\n\n')}`
+      : '';
+
     const pedagogicalContext = `
       Matéria: ${subDetails?.code || 'N/A'} — ${subDetails?.name || 'N/A'}
+      ESTILO DO PROFESSOR: ${configDetails.pedagogical_style || 'Humanizado, encorajador e técnico.'}
+      
       Ementa (trechos):
       ${syllabusContext || 'Sem ementa cadastrada.'}
 
       Atividade: ${actDetails?.title || 'Dissertação Geral'}
       Critérios de Avaliação: ${(actDetails as any)?.description || 'Avaliar clareza, coesão e domínio técnico dos conceitos.'}
+      ${auditContext}
     `;
 
     // 2. Extração de Texto (Pilar 1)
