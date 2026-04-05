@@ -765,6 +765,58 @@ export default function Dashboard() {
     } finally { setBatchRunning(false); }
   };
 
+  const retryBatchEntry = async (entryId: string) => {
+    const entry = batchEntries.find(e => e.id === entryId);
+    if (!entry || !entry.studentId || !entry.subjectId) return;
+    
+    setBatchEntries(prev => prev.map(e => e.id === entryId ? { ...e, status: 'processing', error: undefined } : e));
+    setBatchRunning(true);
+    
+    try {
+      const stu = dbData.students.find(s => s.id === entry.studentId);
+      const sub = dbData.subjects.find(s => s.id === entry.subjectId);
+      const activity = dbData.activities.find(a => a.id === batchActivityId);
+      if (!stu || !sub) throw new Error('Dados não encontrados');
+
+      const fd = new FormData();
+      fd.append('items[0][studentName]', stu.name);
+      fd.append('items[0][subject]', sub.name);
+      if (activity) {
+        fd.append('items[0][activityId]', activity.id);
+        fd.append('items[0][activity]', activity.title);
+      }
+      fd.append('items[0][file]', entry.file);
+
+      const res = await fetch(`/api/grading/batch?mode=${dbMode}`, { method: 'POST', body: fd });
+      const report = await res.json();
+      if (report.error) throw new Error(report.error);
+
+      setBatchEntries(prev => prev.map(e => {
+        if (e.id !== entryId) return e;
+        const found = (report.submissions as Submission[]).find(s => s.studentName === stu.name);
+        if (found) return { ...e, status: 'done', result: found };
+        const err = (report.errors as any[]).find(er => er.studentName === stu.name);
+        return { ...e, status: 'error', error: err?.error ?? 'Erro desconhecido' };
+      }));
+      
+      if (report.succeeded > 0) {
+        setBatchReport(prev => prev ? { succeeded: prev.succeeded + 1, failed: Math.max(0, prev.failed - 1) } : null);
+      }
+      await fetchDB();
+    } catch (e: any) {
+      setBatchEntries(prev => prev.map(e => e.id === entryId ? { ...e, status: 'error', error: e.message } : e));
+    } finally {
+      setBatchRunning(false);
+    }
+  };
+
+  const goToManualForEntry = (e: BatchEntry) => {
+    setManuStu(e.studentId);
+    setManuSub(e.subjectId);
+    setManuAct(batchActivityId);
+    setView('manual');
+  };
+
   const handleCopyActivities = async () => {
     if (!copySubjectId || (!copyDestSubjectId && !newSubjectName)) {
       return alert('Selecione a matéria de origem e o destino (ou nome da nova matéria).');
@@ -1540,11 +1592,16 @@ export default function Dashboard() {
                               </td>
                               <td style={{ maxWidth: 400 }}>
                                 <p style={{ fontSize: 12, lineHeight: 1.4 }} className={e.status === 'error' ? 'text-red' : ''}>
-                                  {e.status === 'done' ? e.result?.feedback?.slice(0, 150) + '...' : e.error}
+                                  {e.status === 'done' ? e.result?.feedback?.slice(0, 150) + '...' : (
+                                    <span><strong>Falha:</strong> {e.error}</span>
+                                  )}
                                 </p>
                               </td>
                               <td style={{ textAlign: 'right' }}>
                                 <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                                  {e.status === 'processing' && (
+                                    <div className="spin"><RefreshCw size={14}/></div>
+                                  )}
                                   {e.status === 'done' && (
                                     <>
                                       <button className="btn-icon" onClick={() => setSelected(e.result!)} title="Ver Detalhes">
@@ -1556,9 +1613,19 @@ export default function Dashboard() {
                                     </>
                                   )}
                                   {e.status === 'error' && (
-                                    <button className="btn-icon-danger" onClick={() => setBatchEntries(prev => prev.filter(x => x.id !== e.id))}>
-                                      <Trash2 size={14}/>
-                                    </button>
+                                    <>
+                                      <button className="btn-ghost" style={{ padding: '4px 10px', height: 'auto', fontSize: 11, border: '1px solid var(--accent)' }} 
+                                        onClick={() => retryBatchEntry(e.id)} title="Tentar Novamente">
+                                        <RefreshCw size={12}/> Retentar
+                                      </button>
+                                      <button className="btn-ghost" style={{ padding: '4px 10px', height: 'auto', fontSize: 11, border: '1px solid #10b981' }} 
+                                        onClick={() => goToManualForEntry(e)} title="Lançar Manualmente">
+                                        <Edit2 size={12}/> Manual
+                                      </button>
+                                      <button className="btn-icon-danger" onClick={() => setBatchEntries(prev => prev.filter(x => x.id !== e.id))} title="Remover da Lista">
+                                        <Trash2 size={14}/>
+                                      </button>
+                                    </>
                                   )}
                                 </div>
                               </td>
