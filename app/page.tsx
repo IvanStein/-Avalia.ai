@@ -1552,12 +1552,32 @@ export default function Dashboard() {
         {/* ── ASSISTENTE CANVAS ──────────────────────────────────────────────────────── */}
         {view === 'canvas' && (() => {
           const subject = dbData.subjects.find(s => s.id === canvSubId);
-          const filteredSubs = dbData.submissions.filter(s => 
-            s.subject === subject?.name && 
-            (canvActTitle === '' || getActName(s.feedback || '') === canvActTitle)
-          ).sort((a,b) => a.studentName.localeCompare(b.studentName));
+          
+          // Improved logic: Show ALL students of the subject, filling missing ones with 0
+          const displayEntries = dbData.students
+            .filter(stu => (stu.subjectIds || []).includes(canvSubId))
+            .map(stu => {
+               const realSub = dbData.submissions.find(s => 
+                 s.studentName === stu.name && 
+                 s.subject === subject?.name && 
+                 (canvActTitle === '' || getActName(s.feedback || '') === canvActTitle)
+               );
 
-          const activeSub = filteredSubs.find(s => s.id === canvActiveSubId) || filteredSubs[0];
+               if (realSub) return { ...realSub, isMissing: false };
+               
+               return {
+                 id: `missing-${stu.id}`,
+                 studentName: stu.name,
+                 subject: subject?.name || 'Não informada',
+                 grade: 0,
+                 feedback: "Nota 0 e duas faltas",
+                 isMissing: true,
+                 status: 'graded' as const
+               };
+            })
+            .sort((a,b) => a.studentName.localeCompare(b.studentName));
+
+          const activeSub = displayEntries.find(s => s.id === canvActiveSubId) || displayEntries[0];
 
           const copyToClipboard = (text: string, label: string) => {
             navigator.clipboard.writeText(text);
@@ -1605,27 +1625,34 @@ export default function Dashboard() {
                   {/* Student List Sidebar */}
                   <div className="card" style={{ padding: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
                     <div style={{ padding: '12px 16px', background: 'var(--surface2)', borderBottom: '1px solid var(--border)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text2)' }}>
-                      Alunos ({filteredSubs.length})
+                      Alunos ({displayEntries.length})
                     </div>
-                    {filteredSubs.map(s => (
-                      <div 
-                        key={s.id} 
-                        onClick={() => setCanvActiveSubId(s.id)}
-                        style={{ 
-                          padding: '12px 16px', 
-                          cursor: 'pointer', 
-                          borderBottom: '1px solid var(--border)',
-                          background: (canvActiveSubId === s.id || (!canvActiveSubId && canvActiveSubId === s.id)) ? 'var(--accent)10' : 'transparent',
-                          borderLeft: (canvActiveSubId === s.id) ? '4px solid var(--accent)' : '4px solid transparent',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center'
-                        }}
-                      >
-                        <span style={{ fontSize: 13, fontWeight: canvActiveSubId === s.id ? 600 : 400, color: canvActiveSubId === s.id ? 'var(--accent)' : 'var(--text1)' }}>{s.studentName}</span>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: (s.grade || 0) >= 7 ? 'var(--blue)' : 'var(--red)' }}>{s.grade?.toFixed(1)}</span>
-                      </div>
-                    ))}
+                    {displayEntries.map(s => {
+                      const isActive = (canvActiveSubId === s.id) || (!canvActiveSubId && displayEntries[0]?.id === s.id);
+                      return (
+                        <div 
+                          key={s.id} 
+                          onClick={() => setCanvActiveSubId(s.id)}
+                          style={{ 
+                            padding: '12px 16px', 
+                            cursor: 'pointer', 
+                            borderBottom: '1px solid var(--border)',
+                            background: isActive ? 'var(--accent)10' : 'transparent',
+                            borderLeft: isActive ? '4px solid var(--accent)' : '4px solid transparent',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            opacity: s.isMissing ? 0.6 : 1
+                          }}
+                        >
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: 13, fontWeight: isActive ? 600 : 400, color: isActive ? 'var(--accent)' : 'var(--text1)' }}>{s.studentName}</span>
+                            {s.isMissing && <span style={{ fontSize: 9, color: 'var(--red)', fontWeight: 600 }}>Ausente</span>}
+                          </div>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: s.isMissing ? 'var(--red)' : ((s.grade || 0) >= 7 ? 'var(--blue)' : 'var(--red)') }}>{s.grade?.toFixed(1)}</span>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   {/* High-Action Clipboard Area */}
@@ -1638,6 +1665,7 @@ export default function Dashboard() {
                           <div>
                             <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 4 }}>{activeSub.studentName}</h2>
                             <p style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 14 }}>{activeSub.subject} • {getActName(activeSub.feedback || '') || 'Geral'}</p>
+                            {activeSub.isMissing && <div className="badge badge-red" style={{ marginTop: 8 }}>Entrega não identificada</div>}
                           </div>
                           <div style={{ textAlign: 'right' }}>
                             <p style={{ fontSize: 11, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '.1em' }}>Nota para o Canvas</p>
@@ -1647,23 +1675,23 @@ export default function Dashboard() {
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32 }}>
                           {/* Column 1: Grade Action */}
-                          <div className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, border: '2px solid var(--accent)30' }}>
+                          <div className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, border: activeSub.isMissing ? '2px solid var(--red)30' : '2px solid var(--accent)30' }}>
                              <div style={{ fontSize: 13, color: 'var(--text2)', fontWeight: 600 }}>Campo "Nota de 0"</div>
-                             <button className="btn-primary" style={{ width: '100%', height: 60, fontSize: 18 }} onClick={() => copyToClipboard(activeSub.grade?.toFixed(1) || '0.0', 'Nota')}>
+                             <button className={activeSub.isMissing ? "btn-danger" : "btn-primary"} style={{ width: '100%', height: 60, fontSize: 18 }} onClick={() => copyToClipboard(activeSub.grade?.toFixed(1) || '0.0', 'Nota')}>
                                <Copy size={20}/> Copiar Nota: <b>{activeSub.grade?.toFixed(1)}</b>
                              </button>
                              <p style={{ fontSize: 10, color: 'var(--text2)' }}>Clique para copiar e cole no Canvas</p>
                           </div>
 
                           {/* Column 2: Feedback Summary Action */}
-                          <div className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 12, border: '2px solid var(--accent)30' }}>
+                          <div className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 12, border: activeSub.isMissing ? '2px solid var(--red)30' : '2px solid var(--accent)30' }}>
                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                <div style={{ fontSize: 13, color: 'var(--text2)', fontWeight: 600 }}>Campo "Comentários" (Resumo)</div>
                                <button className="btn-ghost" style={{ padding: '4px 10px', height: 'auto', fontSize: 11 }} onClick={() => copyToClipboard(getSummary(activeSub.feedback), 'Resumo')}>
                                  <Copy size={12}/> Copiar Resumo
                                </button>
                              </div>
-                             <div style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: 12, fontSize: 12, color: 'var(--text1)', minHeight: 80, lineHeight: 1.5 }}>
+                             <div style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: 12, fontSize: 12, color: activeSub.isMissing ? 'var(--red)' : 'var(--text1)', minHeight: 80, lineHeight: 1.5, fontWeight: activeSub.isMissing ? 600 : 400 }}>
                                {getSummary(activeSub.feedback)}
                              </div>
                           </div>
