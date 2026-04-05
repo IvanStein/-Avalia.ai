@@ -1403,7 +1403,7 @@ export default function Dashboard() {
                       </div>
                       <div style={{ marginTop: 20, padding: 16, background: 'var(--accent)10', borderRadius: 8, border: '1px solid var(--accent)30' }}>
                         <p style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 600, marginBottom: 4 }}>Pronto para processar?</p>
-                        <p style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.4 }}>O sistema usará o novo modelo <b>Gemini 2.0 Flash-Lite</b> para uma análise ultra-rápida e precisa.</p>
+                        <p style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.4 }}>O sistema realizará uma análise completa e detalhada baseada nos critérios pedagógicos.</p>
                       </div>
                     </div>
                   </div>
@@ -1443,8 +1443,8 @@ export default function Dashboard() {
                 {batchRunning ? (
                   <div className="empty-state" style={{ height: 400 }}>
                     <div className="spin" style={{ marginBottom: 20 }}><RefreshCw size={48} color="var(--accent)"/></div>
-                    <h2>Corrigindo Trabalhos...</h2>
-                    <p>Aguarde enquanto a IA analisa cada documento baseado na ementa e critérios.</p>
+                    <h2>Analisando Trabalhos...</h2>
+                    <p>Aguarde enquanto o sistema processa cada documento baseado na ementa e critérios pedagógicos.</p>
                   </div>
                 ) : (
                   <div>
@@ -1881,7 +1881,7 @@ export default function Dashboard() {
                   </div>
                 )}
                 {stuSubmissions.sort((a,b) => (b.id > a.id ? 1 : -1)).map(sub => {
-                  const subDate = sub.id ? new Date(parseInt(sub.id.split('-').pop() || '0')) : new Date();
+                  const subDate = sub.submittedAt ? new Date(sub.submittedAt.includes('T') ? sub.submittedAt : parseInt(sub.submittedAt)) : (sub.id && !isNaN(parseInt(sub.id.split('-').pop() || '')) ? new Date(parseInt(sub.id.split('-').pop() || '0')) : new Date());
                   return (
                     <div key={sub.id} className="activity-card">
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
@@ -1900,7 +1900,7 @@ export default function Dashboard() {
                         </div>
                       </div>
                       <div className="feedback-box">
-                        <div className="feedback-title"><Sparkles size={12}/> Feedback da IA</div>
+                        <div className="feedback-title"><CheckCircle size={12}/> Comentário do Professor</div>
                         <p className="feedback-text">{sub.feedback}</p>
                       </div>
                     </div>
@@ -2087,7 +2087,7 @@ export default function Dashboard() {
           )}
           {selected.feedback && (
             <div className="feedback-box">
-              <p className="feedback-title"><Sparkles size={13}/> Análise Aval.IA</p>
+              <p className="feedback-title"><CheckCircle size={13}/> Comentário do Professor</p>
               <p className="feedback-text">{selected.feedback}</p>
             </div>
           )}
