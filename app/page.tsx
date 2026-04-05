@@ -5,7 +5,7 @@ import {
   Upload, BookOpen, CheckCircle, Clock, GraduationCap, Sparkles,
   Database, UserPlus, Plus, Trash2, AlertCircle, Layers, X,
   BarChart2, Users, Lightbulb, FileText, ChevronRight, ChevronDown, Edit2,
-  ArrowRight, Check, RefreshCw, Copy, Hash
+  ArrowRight, Check, RefreshCw, Copy, Hash, PanelLeftClose, PanelLeftOpen, ArrowLeft
 } from "lucide-react";
 
 // â”€â”€ TYPES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -123,8 +123,10 @@ function syllabusChunks(raw: string): string[] {
 
 // â”€â”€ COMPONENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function Dashboard() {
-  type View = 'dashboard'|'subjects'|'students'|'enrollment'|'activities'|'batch'|'implementacoes'|'settings'|'copy'|'reports';
+  type View = 'dashboard'|'subjects'|'students'|'enrollment'|'activities'|'batch'|'implementacoes'|'settings'|'copy'|'reports'|'student-profile';
   const [view, setView] = useState<View>('dashboard');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [hasMounted, setHasMounted] = useState(false);
   const [dbData, setDbData] = useState<DBData>(EMPTY_DB);
   const [dbMode, setDbMode] = useState<'local'|'remote'>('remote');
@@ -815,15 +817,20 @@ export default function Dashboard() {
   // â”€â”€ NAV â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const NavItem = ({ v, icon: Icon, label }: { v: View; icon: any; label: string }) => (
     <button className={`nav-item ${view === v ? 'active' : ''}`} onClick={() => setView(v)}>
-      <Icon size={16} strokeWidth={1.8} /> {label}
+      <Icon size={18} strokeWidth={1.8} /> <span>{label}</span>
     </button>
   );
 
   return (
     <div className="app">
       {/* â”€â”€ SIDEBAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <aside className="sidebar">
-        <div className="logo"><GraduationCap size={26} strokeWidth={1.5}/><span>Aval.IA</span></div>
+      <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div className="logo"><GraduationCap size={26} strokeWidth={1.5}/><span>Aval.IA</span></div>
+          <button className="btn-icon" onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>
+            {sidebarCollapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}
+          </button>
+        </div>
         <nav className="nav">
           <p className="nav-label">Visão Geral</p>
           <NavItem v="dashboard"      icon={BookOpen}    label="Dashboard"/>
@@ -840,7 +847,7 @@ export default function Dashboard() {
           <NavItem v="implementacoes" icon={Lightbulb}   label="Implementações"/>
           <NavItem v="settings"       icon={Database}    label="Configurações"/>
         </nav>
-        <div style={{marginTop: 'auto', paddingTop: 16, borderTop: '1px solid var(--border)', textAlign: 'center', fontSize: 10, color: 'var(--text2)', fontFamily: 'monospace'}}>
+        <div className="sidebar-footer-text" style={{marginTop: 'auto', paddingTop: 16, borderTop: '1px solid var(--border)', textAlign: 'center', fontSize: 10, color: 'var(--text2)', fontFamily: 'monospace'}}>
           v0.1.0-alpha.1
         </div>
       </aside>
@@ -1740,7 +1747,17 @@ export default function Dashboard() {
                                   fontWeight: (j === 0 || isAnyGradeCol) ? 600 : 400,
                                   color: customColor,
                                 }}>
-                                  {j === 3 && !reportPreviewData.isMatrix ? (
+                                  {j === 0 ? (
+                                    <span className="td-name-link" onClick={() => {
+                                      const stu = dbData.students.find(s => s.name === cell);
+                                      if (stu) {
+                                        setSelectedStudentId(stu.id);
+                                        setView('student-profile');
+                                      }
+                                    }}>
+                                      {cell}
+                                    </span>
+                                  ) : j === 3 && !reportPreviewData.isMatrix ? (
                                     <div style={{ maxWidth: 400, maxHeight: 40, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                                       {cell}
                                     </div>
@@ -1760,6 +1777,92 @@ export default function Dashboard() {
             )}
           </div>
         )}
+
+        {/* â• â•  STUDENT PROFILE â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â•  */}
+        {view === 'student-profile' && selectedStudentId && (() => {
+          const stu = dbData.students.find(s => s.id === selectedStudentId);
+          if (!stu) return null;
+          const stuSubmissions = dbData.submissions.filter(sub => sub.studentName === stu.name && sub.status === 'graded');
+          const avg = stuSubmissions.length > 0 
+            ? (stuSubmissions.reduce((acc, curr) => acc + (curr.grade || 0), 0) / stuSubmissions.length).toFixed(1)
+            : '0.0';
+
+          return (
+            <div className="fade-in">
+              <header className="header">
+                <div>
+                  <button className="btn-ghost" onClick={() => setView('reports')} style={{ marginBottom: 12 }}>
+                    <ArrowLeft size={14}/> Voltar para Relatórios
+                  </button>
+                  <h1>Jornada de {stu.name}</h1>
+                  <p className="subtitle">Prontuário Acadêmico Detalhado</p>
+                </div>
+              </header>
+
+              <div className="student-profile-header">
+                <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
+                  <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, fontWeight: 700, color: '#fff' }}>
+                    <div style={{ margin: 'auto' }}>{stu.name.charAt(0)}</div>
+                  </div>
+                  <div>
+                    <h2 style={{ fontSize: 24, marginBottom: 4 }}>{stu.name}</h2>
+                    <div style={{ display: 'flex', gap: 12 }}>
+                       <span className="badge badge-gray">RA: {stu.ra || 'N/A'}</span>
+                       <span className="badge badge-blue">{stuSubmissions.length} Atividades Realizadas</span>
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 16 }}>
+                  <div className="student-stat-card">
+                    <span style={{ fontSize: 10, textTransform: 'uppercase', color: 'var(--text2)' }}>Média Geral</span>
+                    <span style={{ fontSize: 28, fontWeight: 700, color: parseFloat(avg) > 7 ? '#3b82f6' : '#ef4444' }}>{avg}</span>
+                  </div>
+                  <div className="student-stat-card">
+                    <span style={{ fontSize: 10, textTransform: 'uppercase', color: 'var(--text2)' }}>Total Faltas</span>
+                    <span style={{ fontSize: 28, fontWeight: 700, color: 'var(--yellow)' }}>
+                      {(dbData.activities.filter(a => (stu.subjectIds || []).includes(a.subjectId)).length * 2) - (stuSubmissions.length * 2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>Linha do Tempo de Atividades</h3>
+              <div className="activity-feed">
+                {stuSubmissions.length === 0 && (
+                  <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text2)' }}>
+                    Nenhuma atividade avaliada encontrada para este aluno.
+                  </div>
+                )}
+                {stuSubmissions.sort((a,b) => (b.id > a.id ? 1 : -1)).map(sub => {
+                  const subDate = sub.id ? new Date(parseInt(sub.id.split('-').pop() || '0')) : new Date();
+                  return (
+                    <div key={sub.id} className="activity-card">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                        <div>
+                          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent2)', textTransform: 'uppercase' }}>{sub.subject}</span>
+                          <h4 style={{ fontSize: 16, fontWeight: 600, marginTop: 4 }}>{getActName(sub.feedback || '') || 'Atividade'}</h4>
+                          <p style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
+                            Avaliado em {subDate.toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 20, fontWeight: 700, color: (sub.grade || 0) > 7 ? '#3b82f6' : '#ef4444' }}>
+                            {sub.grade?.toFixed(1)}
+                          </div>
+                          <span style={{ fontSize: 10, color: 'var(--text2)' }}>Nota</span>
+                        </div>
+                      </div>
+                      <div className="feedback-box">
+                        <div className="feedback-title"><Sparkles size={12}/> Feedback da IA</div>
+                        <p className="feedback-text">{sub.feedback}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* â•â• IMPLEMENTAÇÃ•ES â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•= */}
         {view === 'implementacoes' && <>
