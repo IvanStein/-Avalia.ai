@@ -161,6 +161,10 @@ export default function Dashboard() {
 
   const [copySubjectId, setCopySubjectId] = useState('');
   const [copyActivityId, setCopyActivityId] = useState('');
+  const [copyDestSubjectId, setCopyDestSubjectId] = useState('');
+  const [copySelectedActs, setCopySelectedActs] = useState<string[]>([]);
+  const [newSubjectName, setNewSubjectName] = useState('');
+  const [copyProcessing, setCopyProcessing] = useState(false);
 
   // Reports state
   const [reportType, setReportType] = useState<'activity'|'subject'>('subject');
@@ -641,6 +645,43 @@ export default function Dashboard() {
     } finally { setBatchRunning(false); }
   };
 
+  const handleCopyActivities = async () => {
+    if (!copySubjectId || (!copyDestSubjectId && !newSubjectName)) {
+      return alert('Selecione a matéria de origem e o destino (ou nome da nova matéria).');
+    }
+    if (copySelectedActs.length === 0) return alert('Selecione ao menos uma atividade para copiar.');
+
+    setCopyProcessing(true);
+    try {
+      let destId = copyDestSubjectId;
+      if (!destId && newSubjectName) {
+        const sourceSub = dbData.subjects.find(s => s.id === copySubjectId);
+        const res = await apiPost('subject', { 
+          name: newSubjectName, 
+          code: (sourceSub?.code || '') + '-COPY',
+          syllabus: sourceSub?.syllabus || ''
+        });
+        if (!res?.id) throw new Error('Falha ao criar nova matéria.');
+        destId = res.id;
+      }
+      const actsToCopy = dbData.activities.filter(a => copySelectedActs.includes(a.id));
+      for (const act of actsToCopy) {
+        await apiPost('activity', {
+          subjectId: destId,
+          title: act.title,
+          weight: act.weight,
+          description: act.description
+        });
+      }
+      alert(`${actsToCopy.length} atividades copiadas com sucesso!`);
+      await fetchDB();
+      setCopySelectedActs([]);
+      setNewSubjectName('');
+      setCopyDestSubjectId(destId);
+    } catch (e: any) { alert('Erro na cópia: ' + e.message); }
+    finally { setCopyProcessing(false); }
+  };
+
   const exportToCanvasCSV = () => {
     if (!copySubjectId || !copyActivityId) return alert('Selecione matéria e atividade primeiro.');
     
@@ -715,7 +756,7 @@ export default function Dashboard() {
           <NavItem v="activities"     icon={Clock}       label="Atividades"/>
           <p className="nav-label">Trabalho</p>
           <NavItem v="batch"          icon={Layers}      label="Correção"/>
-          <NavItem v="copy"           icon={CheckCircle} label="Lançamento Canvas"/>
+          <NavItem v="copy"           icon={Layers}      label="Copia de Atividades"/>
           <NavItem v="reports"        icon={BarChart2}   label="Relatórios"/>
           <p className="nav-label">Sistema</p>
           <NavItem v="implementacoes" icon={Lightbulb}   label="Implementações"/>
@@ -898,280 +939,8 @@ export default function Dashboard() {
         </>}
 
         {/* â•â• RELATÓRIOS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
-        {view === 'reports' && (() => {
-          const getActName = (feedback: string) => {
-            const fl = (feedback ?? '').split('\n')[0];
-            return fl.includes('Atividade:') ? fl.replace('Atividade:', '').trim() : null;
-          };
 
-          const rSubject   = dbData.subjects.find(s => s.id === reportSubjectId);
-          const rActivities = dbData.activities.filter(a => a.subjectId === reportSubjectId);
-          const rActivity  = dbData.activities.find(a => a.id === reportActivityId);
 
-          // Activities that have at least one submission in the chosen subject
-          const activitiesWithSubs = rActivities.filter(act =>
-            dbData.submissions.some(s => {
-              if (s.subject !== rSubject?.name) return false;
-              const an = getActName(s.feedback ?? '');
-              return an === act.title;
-            })
-          );
-
-          // Students enrolled in the chosen subject
-          const enrolledStudents = reportSubjectId
-            ? dbData.students.filter(s => (s.subjectIds || []).includes(reportSubjectId)).sort((a,b) => a.name.localeCompare(b.name))
-            : [];
-
-          // â”€â”€ PIVOT mode (no activity filter selected) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-          const isPivot = reportSubjectId && !reportActivityId;
-
-          // â”€â”€ DETAIL mode (specific activity chosen) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-          const detailRows = !isPivot ? dbData.submissions.filter(sub => {
-            if (!reportSubjectId || sub.subject !== rSubject?.name) return false;
-            if (!reportActivityId) return true;
-            return getActName(sub.feedback ?? '') === rActivity?.title;
-          }).sort((a,b) => a.studentName.localeCompare(b.studentName)) : [];
-
-          const grades = detailRows.map(s => s.grade ?? 0).filter(g => g > 0);
-          const avg  = grades.length ? grades.reduce((a,b) => a+b,0)/grades.length : 0;
-          const max  = grades.length ? Math.max(...grades) : 0;
-          const min  = grades.length ? Math.min(...grades) : 0;
-          const passing = grades.filter(g => g >= 5).length;
-
-          const gc = (g: number | null) => g === null ? '#6b7280' : g >= 7 ? '#10b981' : g >= 5 ? '#f59e0b' : '#ef4444';
-
-          // â”€â”€ PDF Export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-          const exportPDF = () => {
-            let tableHtml = '';
-
-            if (isPivot) {
-              const actCols = activitiesWithSubs;
-              tableHtml = `
-                <table><thead><tr>
-                  <th>Aluno</th>
-                  ${actCols.map(a => `<th>${a.title.slice(0,20)}</th>`).join('')}
-                  <th>Faltas</th>
-                </tr></thead><tbody>
-                ${enrolledStudents.map(stu => {
-                  let faltas = 0;
-                  const cells = actCols.map(act => {
-                    const sub = dbData.submissions.find(s =>
-                      s.studentName === stu.name &&
-                      s.subject === rSubject?.name &&
-                      getActName(s.feedback ?? '') === act.title
-                    );
-                    if (!sub) { faltas += 2; return `<td class="miss">—</td>`; }
-                    const g = sub.grade ?? 0;
-                    const cls = g >= 7 ? 'high' : g >= 5 ? 'mid' : 'low';
-                    return `<td class="grade ${cls}">${g.toFixed(1)}</td>`;
-                  }).join('');
-                  return `<tr><td>${stu.name}</td>${cells}<td class="${faltas > 0 ? 'low' : ''}">${faltas}</td></tr>`;
-                }).join('')}
-                </tbody></table>`;
-            } else {
-              tableHtml = `
-                <div style="display:flex;gap:12px;margin-bottom:16px">
-                  <div style="background:#f4f4f4;padding:12px 18px;border-radius:6px"><b style="font-size:20px">${detailRows.length}</b><br><span style="font-size:10px;color:#666">Correções</span></div>
-                  <div style="background:#f4f4f4;padding:12px 18px;border-radius:6px"><b style="font-size:20px;color:${avg >= 7 ? '#059669' : avg >= 5 ? '#d97706' : '#dc2626'}">${avg.toFixed(1)}</b><br><span style="font-size:10px;color:#666">Média</span></div>
-                  <div style="background:#f4f4f4;padding:12px 18px;border-radius:6px"><b style="font-size:20px;color:#059669">${max.toFixed(1)}</b><br><span style="font-size:10px;color:#666">Maior Nota</span></div>
-                  <div style="background:#f4f4f4;padding:12px 18px;border-radius:6px"><b style="font-size:20px;color:#dc2626">${min.toFixed(1)}</b><br><span style="font-size:10px;color:#666">Menor Nota</span></div>
-                  <div style="background:#f4f4f4;padding:12px 18px;border-radius:6px"><b style="font-size:20px;color:#059669">${passing}/${grades.length}</b><br><span style="font-size:10px;color:#666">Aprovados</span></div>
-                </div>
-                <table><thead><tr><th>#</th><th>Aluno</th><th>Atividade</th><th>Nota</th><th>Data</th></tr></thead>
-                <tbody>${detailRows.map((s,i) => {
-                  const an = getActName(s.feedback ?? '') ?? 'Geral';
-                  const g = s.grade ?? 0;
-                  const cls = g >= 7 ? 'high' : g >= 5 ? 'mid' : 'low';
-                  return `<tr><td>${i+1}</td><td>${s.studentName}</td><td>${an}</td><td class="grade ${cls}">${g.toFixed(1)}</td><td>${(s.submittedAt||'').split('T')[0]}</td></tr>`;
-                }).join('')}</tbody></table>`;
-            }
-
-            const html = `<html><head><title>Relatório</title><style>
-              @page { size: landscape; margin: 1cm; }
-              body{font-family:Arial,sans-serif;font-size:11px;padding:20px;color:#111}
-              h1{font-size:16px;margin-bottom:2px}p.sub{color:#666;margin-bottom:12px}
-              .stats{display:flex;gap:16px;margin-bottom:16px}
-              .stat{background:#f4f4f4;padding:8px 14px;border-radius:6px}
-              .stat b{font-size:18px;display:block}
-              table{width:100%;border-collapse:collapse}
-              th{background:#e8e8e8;text-align:left;padding:6px 10px;font-size:10px;text-transform:uppercase}
-              td{padding:6px 10px;border-bottom:1px solid #eee}
-              .grade{font-weight:bold}.high{color:#059669}.mid{color:#d97706}.low{color:#dc2626}.miss{color:#aaa}
-            </style></head><body>
-              <h1>Relatório de Avaliações — ${rSubject?.name ?? 'Geral'}</h1>
-              <p class="sub">${rActivity ? rActivity.title + ' · ' : ''}${new Date().toLocaleDateString('pt-BR')}</p>
-              ${!isPivot && grades.length ? `<div class="stats">
-                <div class="stat"><b>${detailRows.length}</b>Correções</div>
-                <div class="stat"><b>${avg.toFixed(1)}</b>Média</div>
-                <div class="stat"><b>${max.toFixed(1)}</b>Maior</div>
-                <div class="stat"><b>${min.toFixed(1)}</b>Menor</div>
-                <div class="stat"><b>${passing}/${grades.length}</b>Aprov.</div>
-              </div>` : ''}
-              ${tableHtml}
-            </body></html>`;
-
-            const win = window.open('', '_blank');
-            win?.document.write(html);
-            win?.document.close();
-            setTimeout(() => win?.print(), 400);
-          };
-
-          return (
-            <div className="fade-in">
-              <header className="header">
-                <div>
-                  <h1>Relatórios</h1>
-                  <p className="subtitle">Pauta de notas e desempenho por atividade</p>
-                </div>
-                <button className="btn-primary" onClick={exportPDF} disabled={!reportSubjectId}>
-                  <Upload size={16}/> Exportar PDF
-                </button>
-              </header>
-
-              {/* Filtros */}
-              <div className="card" style={{padding:'20px 24px', marginBottom:24, display:'grid', gridTemplateColumns:'1fr 1fr', gap:20}}>
-                <div>
-                  <label className="field-label">Matéria *</label>
-                  <select className="input" value={reportSubjectId} onChange={e => { setReportSubjectId(e.target.value); setReportActivityId(''); }}>
-                    <option value="">— Selecione uma matéria —</option>
-                    {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="field-label">Filtrar por Atividade <span style={{color:'var(--text2)', fontWeight:400}}>(opcional)</span></label>
-                  <select className="input" value={reportActivityId} onChange={e => setReportActivityId(e.target.value)} disabled={!reportSubjectId}>
-                    <option value="">Todas as atividades (visão geral)</option>
-                    {activitiesWithSubs.map(a => <option key={a.id} value={a.id}>{a.title}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              {!reportSubjectId && (
-                <div className="empty-state" style={{background:'var(--surface)', borderRadius:12, padding:48, border:'1px dashed var(--border)'}}>
-                  <FileText size={40} style={{opacity:0.2, marginBottom:16}}/>
-                  <p>Selecione uma matéria para gerar o relatório.</p>
-                </div>
-              )}
-
-              {/* â”€â”€ PIVOT TABLE (todas as atividades) â”€â”€ */}
-              {isPivot && (() => {
-                if (activitiesWithSubs.length === 0) return (
-                  <div className="empty-state" style={{background:'var(--surface)', borderRadius:12, padding:40, border:'1px dashed var(--border)'}}>
-                    <FileText size={40} style={{opacity:0.2, marginBottom:16}}/>
-                    <p>Nenhuma atividade corrigida nesta matéria ainda.</p>
-                  </div>
-                );
-                return (
-                  <div className="table-wrap fade-in" style={{overflowX:'auto'}}>
-                    <table className="table" style={{minWidth: 600}}>
-                      <thead>
-                        <tr>
-                          <th style={{minWidth:180}}>Aluno</th>
-                          {activitiesWithSubs.map(act => (
-                            <th key={act.id} style={{textAlign:'center', minWidth:90, fontSize:11}}>
-                              {act.title.match(/A\.A\s*\d+/i)?.[0] ?? act.title.slice(0,12)}
-                            </th>
-                          ))}
-                          <th style={{textAlign:'center', minWidth:60, color:'#ef4444'}}>Faltas</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {enrolledStudents.map(stu => {
-                          let faltas = 0;
-                          return (
-                            <tr key={stu.id}>
-                              <td className="td-name">{stu.name}</td>
-                              {activitiesWithSubs.map(act => {
-                                const sub = dbData.submissions.find(s =>
-                                  s.studentName === stu.name &&
-                                  s.subject === rSubject?.name &&
-                                  getActName(s.feedback ?? '') === act.title
-                                );
-                                if (!sub) { faltas += 2; return <td key={act.id} style={{textAlign:'center', color:'#6b7280', fontSize:12}}>—</td>; }
-                                const g = sub.grade ?? 0;
-                                return (
-                                  <td key={act.id} style={{textAlign:'center', cursor:'pointer'}} onClick={() => setSelected(sub)} title="Ver feedback">
-                                    <span style={{fontWeight:700, fontSize:14, color:gc(g)}}>{g.toFixed(1)}</span>
-                                  </td>
-                                );
-                              })}
-                              <td style={{textAlign:'center', fontWeight:700, color: faltas > 0 ? '#ef4444' : '#10b981', fontSize:13}}>
-                                {faltas}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              })()}
-
-              {/* â”€â”€ DETAIL TABLE (atividade específica) â”€â”€ */}
-              {reportSubjectId && reportActivityId && (() => {
-                if (detailRows.length === 0) return (
-                  <div className="empty-state" style={{background:'var(--surface)', borderRadius:12, padding:40, border:'1px dashed var(--border)'}}>
-                    <FileText size={40} style={{opacity:0.2, marginBottom:16}}/>
-                    <p>Nenhuma correção para esta atividade ainda.</p>
-                  </div>
-                );
-                return (
-                  <>
-                    {/* Stats */}
-                    <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap:12, marginBottom:20}}>
-                      {[
-                        { label:'Correções',  val: detailRows.length,      color:'#6366f1' },
-                        { label:'Média',      val: avg.toFixed(1),         color: gc(avg)  },
-                        { label:'Maior Nota', val: max.toFixed(1),         color:'#10b981' },
-                        { label:'Menor Nota', val: min.toFixed(1),         color:'#ef4444' },
-                        { label:'Aprovados',  val: `${passing}/${grades.length}`, color:'#10b981' },
-                      ].map(s => (
-                        <div key={s.label} style={{background:'var(--surface2)', padding:'14px 18px', borderRadius:12, border:'1px solid var(--border)'}}>
-                          <p style={{fontSize:10, color:'var(--text2)', textTransform:'uppercase', letterSpacing:'.05em', marginBottom:6}}>{s.label}</p>
-                          <p style={{fontSize:24, fontWeight:700, color:s.color}}>{s.val}</p>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="table-wrap fade-in">
-                      <table className="table">
-                        <thead>
-                          <tr>
-                            <th style={{width:36}}>#</th>
-                            <th>Aluno</th>
-                            <th style={{width:80, textAlign:'center'}}>Nota</th>
-                            <th style={{width:100}}>Data</th>
-                            <th style={{width:48}}></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {detailRows.map((sub, i) => {
-                            const g = sub.grade ?? 0;
-                            return (
-                              <tr key={sub.id} style={{cursor:'pointer'}} onClick={() => setSelected(sub)}>
-                                <td style={{fontSize:11, color:'var(--text2)'}}>{i+1}</td>
-                                <td className="td-name">{sub.studentName}</td>
-                                <td style={{textAlign:'center'}}>
-                                  <span style={{fontWeight:700, fontSize:16, color:gc(g)}}>{g.toFixed(1)}</span>
-                                </td>
-                                <td className="td-muted" style={{fontSize:11}}>{(sub.submittedAt||'').split('T')[0]}</td>
-                                <td>
-                                  <button className="btn-icon" onClick={e => { e.stopPropagation(); setSelected(sub); }}>
-                                    <ChevronRight size={14}/>
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-          );
-        })()}
         {/* â•â• MATÉRIAS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         {view === 'subjects' && <>
           <header className="header">
@@ -1658,140 +1427,119 @@ export default function Dashboard() {
         )}
 
         {/* â•â• LANÇAMENTO (COPIA E COLA) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
-        {view === 'copy' && (
-          <div className="fade-in">
-            <header className="header" style={{ marginBottom: 24 }}>
-              <div>
-                <h1>Lançamento Canvas</h1>
-                <p className="subtitle">Interface de apoio para o sistema da faculdade</p>
-              </div>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <button className="btn-primary" onClick={exportToCanvasCSV} disabled={!copySubjectId || !copyActivityId}>
-                  <Upload size={16}/> Exportar CSV para Canvas
-                </button>
-                <button className="btn-icon" onClick={fetchDB} title="Recarregar Dados">
-                  <RefreshCw size={18} className={loading ? 'spin' : ''}/>
-                </button>
-              </div>
-            </header>
+        {/* ── COPIA DE ATIVIDADES ─────────────────────────────────────────────────── */}
+        {view === 'copy' && <>
+          <header className="header">
+            <div><h1>Copia de Atividades</h1><p className="subtitle">Clonar rotinas e avaliações entre matérias</p></div>
+            <div className="header-actions">
+               <button className="btn-ghost" onClick={() => {
+                 setCopySubjectId(''); setCopyDestSubjectId(''); setCopySelectedActs([]); setNewSubjectName('');
+               }}><RefreshCw size={14}/> Limpar Tudo</button>
+            </div>
+          </header>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
-              <div className="card" style={{ padding: 24 }}>
-                <label className="field-label">1. Selecione a Matéria</label>
-                <select className="input" style={{ width: '100%' }} value={copySubjectId} onChange={e => {
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(350px, 1fr) minmax(380px, 1.2fr)', gap: 24 }} className="fade-in">
+            <div className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--accent)' }}>
+                <Clock size={16} /> 1. Selecionar Origem
+              </h3>
+              <div>
+                <label className="field-label">Matéria de Origem</label>
+                <select className="input" value={copySubjectId} onChange={e => {
                   setCopySubjectId(e.target.value);
-                  setCopyActivityId('');
+                  setCopySelectedActs([]);
                 }}>
-                  <option value="">Selecione...</option>
-                  {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  <option value="">Selecione a matéria...</option>
+                  {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
                 </select>
               </div>
-              <div className="card" style={{ padding: 24 }}>
-                <label className="field-label">2. Selecione a Atividade</label>
-                <select className="input" style={{ width: '100%' }} value={copyActivityId} onChange={e => setCopyActivityId(e.target.value)} disabled={!copySubjectId}>
-                  <option value="">Selecione...</option>
-                  {dbData.activities.filter(a => a.subjectId === copySubjectId).map(a => (
-                    <option key={a.id} value={a.id}>{a.title}</option>
-                  ))}
-                </select>
-              </div>
+
+              {copySubjectId && (
+                <div className="fade-in" style={{ marginTop: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <label className="field-label" style={{ margin: 0 }}>Atividades disponíveis</label>
+                    <button className="btn-ghost" style={{ padding: '2px 8px', fontSize: 10 }} onClick={() => {
+                      const allIds = dbData.activities.filter(a => a.subjectId === copySubjectId).map(a => a.id);
+                      setCopySelectedActs(copySelectedActs.length === allIds.length ? [] : allIds);
+                    }}>{copySelectedActs.length === dbData.activities.filter(a => a.subjectId === copySubjectId).length ? 'Limpar Seleção' : 'Selecionar Todas'}</button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 400, overflowY: 'auto', padding: '12px 16px', background: 'var(--surface2)', borderRadius: 10, border: '1px solid var(--border)' }}>
+                    {dbData.activities.filter(a => a.subjectId === copySubjectId).map(act => (
+                      <label key={act.id} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '8px 10px', borderRadius: 8, transition: 'all .2s' }}>
+                        <input type="checkbox" checked={copySelectedActs.includes(act.id)} onChange={() => {
+                          setCopySelectedActs(prev => prev.includes(act.id) ? prev.filter(i => i !== act.id) : [...prev, act.id]);
+                        }} />
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: 13, fontWeight: 600 }}>{act.title}</p>
+                          <p style={{ fontSize: 10, color: 'var(--text2)' }}>Peso: {act.weight}</p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {copySubjectId && copyActivityId && (
-              <div className="table-wrap">
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: '250px' }}>Nome do Aluno</th>
-                      <th style={{ width: '100px' }}>Nota</th>
-                      <th>Conceito / Feedback</th>
-                      <th style={{ width: '120px' }}>Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dbData.students
-                      .filter(s => (s.subjectIds || []).includes(copySubjectId))
-                      .sort((a,b) => a.name.localeCompare(b.name))
-                      .map(stu => {
-                        const subName = dbData.subjects.find(s => s.id === copySubjectId)?.name;
-                        const selectedAct = dbData.activities.find(a => a.id === copyActivityId);
-                        const matchingSubmission = dbData.submissions.find(sub => 
-                          sub.studentName === stu.name && 
-                          sub.subject === subName && 
-                          sub.status === 'graded' &&
-                          getActName(sub.feedback || '') === selectedAct?.title
-                        );
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              <div className="card" style={{ padding: 24, border: '1px solid var(--border)' }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--accent)' }}>
+                  <Plus size={16} /> 2. Configurar Destino
+                </h3>
+                <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div>
+                    <label className="field-label">Matéria de Destino</label>
+                    <select className="input" value={copyDestSubjectId} onChange={e => setCopyDestSubjectId(e.target.value)}>
+                      <option value="">-- CRIAR NOVA MATÉRIA --</option>
+                      {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
+                    </select>
+                  </div>
 
-                        const gradeValue = matchingSubmission ? matchingSubmission.grade?.toFixed(1) : "0.0";
-                        const feedbackText = matchingSubmission 
-                          ? matchingSubmission.feedback 
-                          : "nota 0 e duas faltas";
+                  {!copyDestSubjectId && (
+                    <div className="fade-in">
+                      <label className="field-label">Nome da Nova Matéria</label>
+                      <input className="input" placeholder="Ex: Cálculo III (Copy)" value={newSubjectName} onChange={e => setNewSubjectName(e.target.value)} />
+                    </div>
+                  )}
 
-                        return (
-                          <tr key={stu.id} style={{ 
-                            background: matchingSubmission ? 'transparent' : '#ef444408',
-                            borderLeft: matchingSubmission ? 'none' : '3px solid var(--red)'
-                          }}>
-                            <td className="td-name">
-                              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <span>{stu.name}</span>
-                                {!matchingSubmission && <span style={{ fontSize: 10, color: 'var(--red)', fontWeight: 500 }}>AUSENTE</span>}
-                              </div>
-                            </td>
-                            <td>
-                              <span style={{ 
-                                fontWeight: 700, 
-                                fontSize: 14,
-                                color: matchingSubmission ? 'var(--green)' : 'var(--red)',
-                                background: matchingSubmission ? 'var(--green)15' : 'var(--red)15',
-                                padding: '4px 8px',
-                                borderRadius: 6,
-                                minWidth: 45,
-                                textAlign: 'center',
-                                display: 'inline-block'
-                              }}>
-                                {gradeValue}
-                              </span>
-                            </td>
-                            <td style={{ maxWidth: 0, width: '100%' }}>
-                              <div style={{ 
-                                fontSize: 12, 
-                                color: 'var(--text2)', 
-                                background: 'var(--surface2)', 
-                                padding: '8px 12px', 
-                                borderRadius: 8,
-                                border: '1px solid var(--border)',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                                display: 'block'
-                              }} title={feedbackText}>
-                                {feedbackText}
-                              </div>
-                            </td>
-                            <td style={{ textAlign: 'right' }}>
-                              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                                <button className="btn-icon" style={{ background: 'var(--surface3)' }} title="Copiar Nota" onClick={() => {
-                                  navigator.clipboard.writeText(gradeValue || "0.0");
-                                }}>
-                                  <BarChart2 size={15}/>
-                                </button>
-                                <button className="btn-icon" style={{ background: 'var(--accent)20', color: 'var(--accent2)' }} title="Copiar Feedback" onClick={() => {
-                                  navigator.clipboard.writeText(feedbackText || "");
-                                }}>
-                                  <Copy size={15}/>
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
+                  <div style={{ padding: '20px', background: 'var(--accent)', color: '#fff', borderRadius: 12, marginTop: 10, opacity: (copySubjectId && copySelectedActs.length > 0 && (copyDestSubjectId || newSubjectName)) ? 1 : 0.4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <Layers size={22} />
+                      <div>
+                        <p style={{ fontSize: 11, opacity: 0.8 }}>Pronto para copiar</p>
+                        <p style={{ fontSize: 14, fontWeight: 700 }}>{copySelectedActs.length} {copySelectedActs.length === 1 ? 'atividade' : 'atividades'}</p>
+                      </div>
+                    </div>
+                    <button 
+                      className="btn-primary" 
+                      style={{ width: '100%', marginTop: 16, background: '#fff', color: 'var(--accent)', fontWeight: 800, height: 42 }}
+                      onClick={handleCopyActivities}
+                      disabled={copyProcessing || !copySubjectId || copySelectedActs.length === 0 || (!copyDestSubjectId && !newSubjectName)}
+                    >
+                      {copyProcessing ? <Sparkles className="spin" size={16} /> : <Check size={16} />} 
+                      {copyDestSubjectId ? 'Clonar nas Atividades Atuais' : 'Criar Nova com Atividades'}
+                    </button>
+                  </div>
+                </div>
               </div>
-            )}
+
+              {copyDestSubjectId && (
+                <div className="card fade-in" style={{ padding: 24, background: 'var(--surface2)30' }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>Conteúdo Atual no Destino</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {dbData.activities.filter(a => a.subjectId === copyDestSubjectId).map(act => (
+                      <div key={act.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)' }}>
+                        <span style={{ fontSize: 12 }}>{act.title}</span>
+                        <button className="btn-icon-danger" style={{ width: 26, height: 26 }} onClick={() => del('activity', act.id)}>
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        )}
+        </>}
 
         {/* â•â• RELATÓRIOS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         {view === 'reports' && (
@@ -2011,6 +1759,22 @@ export default function Dashboard() {
                 {dbMode === 'remote' 
                   ? '✅ Modo Nuvem ativo: Sincronização em tempo real e persistência global habilitada.' 
                   : '⚠️ Modo Local ativo: Os dados serão salvos apenas no sistema de arquivos deste servidor local.'}
+              </div>
+            </div>
+
+            {/* Copia de Atividades Quick Access Card */}
+            <div className="card" style={{ padding: 24, marginBottom: 24, border: '1px solid var(--border)', background: 'var(--accent)05' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{ background: 'var(--accent)20', padding: 12, borderRadius: 12 }}>
+                  <Layers size={24} color="var(--accent)"/>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 600 }}>Copia de Atividades</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text2)' }}>Clone rotinas pedagógicas e avaliações entre diferentes matérias ou crie novas.</p>
+                </div>
+                <button className="btn-primary" onClick={() => setView('copy')} style={{ padding: '10px 20px' }}>
+                  <Sparkles size={16}/> Iniciar Rotina de Cópia
+                </button>
               </div>
             </div>
 
