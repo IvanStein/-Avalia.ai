@@ -31,7 +31,7 @@ const DB_FILE = path.join(process.cwd(), 'mnt/user-data/db.json');
 const INITIAL_DB: any = {
   subjects:        [{ id: '1', name: 'Cálculo I', code: 'MAT101', syllabus: '' }],
   students:        [{ id: 's1', name: 'Ana Souza', email: 'ana@example.com', turma: 'Turma A' }],
-  activities:      [{ id: 'a1', subjectId: '1', title: 'P1 - Derivadas', weight: 1, description: '' }],
+  activities:      [{ id: 'a1', subjectId: '1', title: 'P1 - Derivadas', weight: 1, description: '', applicationDate: '' }],
   implementacoes:  [],
   submissions:     [],
   skills:          [],
@@ -48,8 +48,9 @@ async function initPostgres() {
       try { await sql`ALTER TABLE subjects ADD COLUMN closed BOOLEAN DEFAULT FALSE`; } catch(e){}
       await sql`CREATE TABLE IF NOT EXISTS students (id TEXT PRIMARY KEY, name TEXT, email TEXT, turma TEXT, subject_ids TEXT)`;
       try { await sql`ALTER TABLE students ADD COLUMN subject_ids TEXT`; } catch(e){}
-      await sql`CREATE TABLE IF NOT EXISTS activities (id TEXT PRIMARY KEY, subject_id TEXT, title TEXT, weight FLOAT, description TEXT, skill_id TEXT)`;
+      await sql`CREATE TABLE IF NOT EXISTS activities (id TEXT PRIMARY KEY, subject_id TEXT, title TEXT, weight FLOAT, description TEXT, skill_id TEXT, application_date TEXT)`;
       try { await sql`ALTER TABLE activities ADD COLUMN skill_id TEXT`; } catch(e){}
+      try { await sql`ALTER TABLE activities ADD COLUMN application_date TEXT`; } catch(e){}
       await sql`CREATE TABLE IF NOT EXISTS implementacoes (id TEXT PRIMARY KEY, title TEXT, description TEXT, status TEXT, priority TEXT, created_at TEXT, category TEXT, image_url TEXT)`;
       try { await sql`ALTER TABLE implementacoes ADD COLUMN category TEXT`; } catch(e){}
       try { await sql`ALTER TABLE implementacoes ADD COLUMN image_url TEXT`; } catch(e){}
@@ -223,33 +224,47 @@ export const db = {
   // ── ACTIVITIES ──────────────────────────────────────────────────────────
   getActivities: async (mode: 'local' | 'remote' = 'local') => {
     if (mode === 'remote') {
+      console.log('☁️ Buscando atividades (Remote)');
+      await initPostgres();
       const { rows } = await sql`SELECT * FROM activities`;
-      return rows.map((r: any) => ({ ...r, subjectId: r.subject_id, skillId: r.skill_id }));
+      return rows.map((r: any) => ({ 
+        ...r, 
+        subjectId: r.subject_id, 
+        skillId: r.skill_id,
+        applicationDate: r.application_date 
+      }));
     }
     return readDB().activities;
   },
-  addActivity: async (subjectId: string, title: string, weight: number, description: string, skillId: string = '', mode: 'local' | 'remote' = 'local') => {
+  addActivity: async (subjectId: string, title: string, weight: number, description: string, skillId: string = '', applicationDate: string = '', mode: 'local' | 'remote' = 'local') => {
     const id = 'a' + Date.now().toString();
     if (mode === 'remote') {
-      await sql`INSERT INTO activities (id, subject_id, title, weight, description, skill_id) VALUES (${id}, ${subjectId}, ${title}, ${weight}, ${description}, ${skillId})`;
-      return { id, subjectId, title, weight, description, skillId };
+      await sql`INSERT INTO activities (id, subject_id, title, weight, description, skill_id, application_date) VALUES (${id}, ${subjectId}, ${title}, ${weight}, ${description}, ${skillId}, ${applicationDate})`;
+      return { id, subjectId, title, weight, description, skillId, applicationDate };
     }
     const data = readDB();
-    const newAct = { id, subjectId, title, weight, description, skillId };
+    const newAct = { id, subjectId, title, weight, description, skillId, applicationDate };
     data.activities.push(newAct);
     saveDB(data);
     return newAct;
   },
-  updateActivity: async (id: string, subjectId: string, title: string, weight: number, description: string, skillId: string = '', mode: 'local' | 'remote' = 'local') => {
+  updateActivity: async (id: string, subjectId: string, title: string, weight: number, description: string, skillId: string = '', applicationDate: string = '', mode: 'local' | 'remote' = 'local') => {
     if (mode === 'remote') {
-      await sql`UPDATE activities SET subject_id = ${subjectId}, title = ${title}, weight = ${weight}, description = ${description}, skill_id = ${skillId} WHERE id = ${id}`;
-      return { id, subjectId, title, weight, description, skillId };
+      await sql`UPDATE activities SET subject_id = ${subjectId}, title = ${title}, weight = ${weight}, description = ${description}, skill_id = ${skillId}, application_date = ${applicationDate} WHERE id = ${id}`;
+      return { id, subjectId, title, weight, description, skillId, applicationDate };
     }
     const data = readDB();
     const act = data.activities.find((a: any) => a.id === id);
-    if (act) { act.subjectId = subjectId; act.title = title; act.weight = weight; act.description = description; act.skillId = skillId; }
+    if (act) { 
+      act.subjectId = subjectId; 
+      act.title = title; 
+      act.weight = weight; 
+      act.description = description; 
+      act.skillId = skillId; 
+      act.applicationDate = applicationDate;
+    }
     saveDB(data);
-    return { id, subjectId, title, weight, description, skillId };
+    return { id, subjectId, title, weight, description, skillId, applicationDate };
   },
   deleteActivity: async (id: string, mode: 'local' | 'remote' = 'local') => {
     if (mode === 'remote') { await sql`DELETE FROM activities WHERE id = ${id}`; return { id }; }

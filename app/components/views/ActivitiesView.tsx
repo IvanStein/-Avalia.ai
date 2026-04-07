@@ -28,16 +28,17 @@ export function ActivitiesView({
       </header>
       <div className="table-wrap fade-in">
         <table className="table" style={{tableLayout:'fixed'}}>
-          <thead><tr><th style={{width:'35%'}}>Título</th><th style={{width:'25%'}}>Matéria</th><th style={{width:'8%'}}>Peso</th><th style={{width:'25%'}}>Critério IA</th><th style={{width:'7%', textAlign:'right'}}></th></tr></thead>
+          <thead><tr><th style={{width:'30%'}}>Título</th><th style={{width:'20%'}}>Matéria</th><th style={{width:'15%'}}>Data</th><th style={{width:'8%'}}>Peso</th><th style={{width:'20%'}}>Critério IA</th><th style={{width:'7%', textAlign:'right'}}></th></tr></thead>
           <tbody>
             {activities.length === 0
-              ? <tr><td colSpan={5}><div className="empty-state"><Clock size={40}/><p>Nenhuma atividade.</p></div></td></tr>
+              ? <tr><td colSpan={6}><div className="empty-state"><Clock size={40}/><p>Nenhuma atividade.</p></div></td></tr>
               : activities.map(a => {
                 const sub = subjects.find(s => s.id === a.subjectId);
                 return (
                   <tr key={a.id}>
                     <td className="td-name">{a.title}</td>
                     <td><span className="badge-subject">{sub?.name ?? a.subjectId}</span></td>
+                    <td className="td-muted" style={{fontSize:12}}>{a.applicationDate || <span style={{opacity:.4}}>Não def.</span>}</td>
                     <td className="td-muted">{a.weight}×</td>
                     <td className="td-desc">{a.description || <span style={{opacity:.4}}>—</span>}</td>
                     <td>

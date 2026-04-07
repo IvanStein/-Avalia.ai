@@ -85,7 +85,9 @@ export function ReportsView({
               <div>
                 <h3 style={{ fontSize: 16, fontWeight: 700 }}>Prévisualização do Relatório</h3>
                 <p style={{ fontSize: 12, color: 'var(--text2)' }}>
-                  {reportPreviewData.title} • {reportPreviewData.body.length} alunos identificados
+                  {reportPreviewData.title} 
+                  {reportPreviewData.applicationDate && <span style={{ color: 'var(--accent)', fontWeight: 600, marginLeft: 6 }}>• Aplicado em: {reportPreviewData.applicationDate}</span>}
+                  • {reportPreviewData.body.length} alunos identificados
                 </p>
               </div>
               <div style={{ display: 'flex', gap: 12 }}>
@@ -99,11 +101,17 @@ export function ReportsView({
             </div>
 
             {/* Summary Bar */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: reportPreviewData.applicationDate ? 'repeat(5, 1fr)' : 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
               <div className="card" style={{ padding: '14px 18px', background: 'var(--surface2)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <span style={{ fontSize: 9, textTransform: 'uppercase', color: 'var(--text2)', fontWeight: 600, letterSpacing: '0.05em' }}>Atividades Corrigidas</span>
                 <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--accent2)' }}>{reportPreviewData.stats.totalGraded}</span>
               </div>
+              {reportPreviewData.applicationDate && (
+                <div className="card" style={{ padding: '14px 18px', background: 'var(--surface2)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={{ fontSize: 9, textTransform: 'uppercase', color: 'var(--text2)', fontWeight: 600, letterSpacing: '0.05em' }}>Data da Aplicação</span>
+                  <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--accent2)' }}>{reportPreviewData.applicationDate}</span>
+                </div>
+              )}
               <div className="card" style={{ padding: '14px 18px', background: 'var(--surface2)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <span style={{ fontSize: 9, textTransform: 'uppercase', color: 'var(--text2)', fontWeight: 600, letterSpacing: '0.05em' }}>Média Geral da Turma</span>
                 <span style={{ fontSize: 20, fontWeight: 700, color: parseFloat(reportPreviewData.stats.classAvg) >= 7 ? 'var(--blue)' : 'var(--red)' }}>{reportPreviewData.stats.classAvg}</span>

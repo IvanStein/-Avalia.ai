@@ -133,7 +133,10 @@ export function CanvasAssistantView({
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
                     <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 4 }}>{activeSub.studentName}</h2>
-                    <p style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 14 }}>{activeSub.subject} • {getActName(activeSub.feedback || '') || 'Geral'}</p>
+                    <p style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 14 }}>
+                      {activeSub.subject} • {getActName(activeSub.feedback || '') || 'Geral'}
+                      {activeSub.applicationDate && <span style={{ color: 'var(--text2)', fontWeight: 400, marginLeft: 8 }}>({activeSub.applicationDate})</span>}
+                    </p>
                     {activeSub.isMissing && <div className="badge badge-red" style={{ marginTop: 8 }}>Entrega não identificada</div>}
                   </div>
                   <div style={{ textAlign: 'right' }}>

@@ -22,6 +22,7 @@ export interface Activity {
   weight: number;
   description?: string;
   skillId?: string;
+  applicationDate?: string;
 }
 
 export interface Submission {

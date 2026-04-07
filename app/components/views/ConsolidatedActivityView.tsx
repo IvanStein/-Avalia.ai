@@ -72,7 +72,9 @@ export function ConsolidatedActivityView({
                           <div>
                             <p style={{fontSize:13, fontWeight:600}}>{a.title}</p>
                             <div style={{display:'flex', alignItems:'center', gap:12, marginTop:2}}>
-                               <span style={{fontSize:11, color:'var(--text2)'}}>{subsForAct.length} / {studentsInSub.length} entregas</span>
+                                                              {a.applicationDate && <span style={{fontSize:10, background:'var(--accent)20', color:'var(--accent)', padding:'1px 6px', borderRadius:4, fontWeight:600}}>{a.applicationDate}</span>}
+                                <span style={{fontSize:11, color:'var(--text2)'}}>{subsForAct.length} / {studentsInSub.length} entregas</span>
+
                                <div style={{width:60, height:4, background:'var(--border)', borderRadius:2, overflow:'hidden'}}>
                                   <div style={{width:`${deliveryRate}%`, height:'100%', background:Number(deliveryRate) > 50 ? '#10b981' : '#f59e0b'}}/>
                                </div>

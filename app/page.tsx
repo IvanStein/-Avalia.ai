@@ -157,7 +157,7 @@ export default function Dashboard() {
   const [syllabusTarget, setSyllabusTarget] = useState<Subject | null>(null);
 
   const [newStuData, setNewStuData] = useState({ name: '', email: '', ra: '', turma: '' });
-  const [newActData, setNewActData] = useState({ subjectId: '', title: '', weight: 1, description: '', skillId: '' });
+  const [newActData, setNewActData] = useState({ subjectId: '', title: '', weight: 1, description: '', skillId: '', applicationDate: '' });
   const [newSkillData, setNewSkillData] = useState({ name: '', description: '', promptTemplate: '', model: 'gemini-1.5-flash', responseType: 'text' });
   const [newImpl, setNewImpl] = useState({ title: '', description: '', priority: 'media', category: '', imageUrl: '' });
   const [tempConfigs, setTempConfigs] = useState<AppConfig>(EMPTY_DB.configs);
@@ -307,7 +307,14 @@ export default function Dashboard() {
       participation
     };
 
-    return { head, body, title: reportType === 'subject' ? sub?.name : `${sub?.name} - ${act?.title}`, isMatrix: reportType === 'subject', stats };
+    return { 
+      head, 
+      body, 
+      title: reportType === 'subject' ? sub?.name : `${sub?.name} - ${act?.title}`, 
+      isMatrix: reportType === 'subject', 
+      stats,
+      applicationDate: act?.applicationDate
+    };
   }, [reportSubjectId, reportType, reportActivityId, dbData.subjects, dbData.activities, dbData.submissions, dbData.students]);
 
   const fetchDB = useCallback(async () => {
@@ -607,8 +614,28 @@ export default function Dashboard() {
 
   // â”€â”€ ACTIVITY ACTIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const openActivityModal = (a?: Activity) => {
-    if (a) { setEditingActivity(a); setNewActData({ subjectId: a.subjectId, title: a.title, weight: a.weight, description: a.description || '', skillId: a.skillId || '' }); }
-    else { setEditingActivity(null); setNewActData({ subjectId: '', title: '', weight: 1, description: '', skillId: '' }); }
+    if (a) { 
+      setEditingActivity(a); 
+      setNewActData({ 
+        subjectId: a.subjectId, 
+        title: a.title, 
+        weight: a.weight, 
+        description: a.description || '', 
+        skillId: a.skillId || '',
+        applicationDate: a.applicationDate || ''
+      }); 
+    }
+    else { 
+      setEditingActivity(null); 
+      setNewActData({ 
+        subjectId: '', 
+        title: '', 
+        weight: 1, 
+        description: '', 
+        skillId: '',
+        applicationDate: ''
+      }); 
+    }
     setShowActivityModal(true);
   };
   const saveActivity = async () => {
@@ -667,17 +694,17 @@ export default function Dashboard() {
     const results: Partial<Activity>[] = blocks.map(block => {
       const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
       
-      // Extract title: it's on the first line after A.A (which was sliced)
-      // Example: " 01 (26/02/2026): Introdução ao Empreendedorismo"
       const firstLine = lines[0];
+      // Matches pattern "01 (26/02/2026): Title"
+      const dateMatch = firstLine.match(/\((\d{2}\/\d{2}\/\d{4})\)/);
+      const applicationDate = dateMatch ? dateMatch[1] : '';
+      
       const titleMatch = firstLine.match(/\s*\d+\s*(?:\([^)]*\))?:\s*(.*)/i) || firstLine.match(/\s*(\d+.*)/);
       const title = titleMatch ? `A.A ${titleMatch[1]}` : `A.A ${firstLine}`;
       
-      // Extract everything as description (the instructions)
-      // We look for key terms like "Instruções", "Leitura", etc.
       const description = lines.slice(1).join('\n');
       
-      return { title, description, weight: 1 };
+      return { title, description, weight: 1, applicationDate };
     });
     
     setParsedActs(results);
@@ -1218,14 +1245,20 @@ export default function Dashboard() {
                    s.subject === dbData.subjects.find(sub => sub.id === canvSubId)?.name && 
                    (canvActTitle ? getActName(s.feedback || '') === canvActTitle : !getActName(s.feedback || ''))
                  );
-                 return realSub || {
-                    id: `missing-${stu.id}`,
-                    studentName: stu.name,
-                    subject: dbData.subjects.find(sub => sub.id === canvSubId)?.name || '',
-                    grade: 0.0,
-                    feedback: canvActTitle ? `Atividade: ${canvActTitle}\nNota 0 e duas faltas` : "Nenhuma avaliação geral encontrada",
-                    isMissing: true,
-                    status: 'graded' as const
+                 const currentActTitle = canvActTitle || (realSub ? getActName(realSub.feedback || '') : '');
+                 const activity = dbData.activities.find(a => a.subjectId === canvSubId && a.title === currentActTitle);
+                 
+                 return {
+                    ...(realSub || {
+                      id: `missing-${stu.id}`,
+                      studentName: stu.name,
+                      subject: dbData.subjects.find(sub => sub.id === canvSubId)?.name || '',
+                      grade: 0.0,
+                      feedback: canvActTitle ? `Atividade: ${canvActTitle}\nNota 0 e duas faltas` : "Nenhuma avaliação geral encontrada",
+                      isMissing: true,
+                      status: 'graded' as const
+                    }),
+                    applicationDate: activity?.applicationDate
                   };
               })
               .sort((a,b) => a.studentName.localeCompare(b.studentName))}
@@ -1297,9 +1330,12 @@ export default function Dashboard() {
                doc.text(dbData.configs.institution_name || 'Aval.IA - Relatório', 14, 20);
                doc.setFontSize(11);
                doc.setTextColor(100);
-               doc.text(`Professor: ${dbData.configs.institution_name || 'Não informado'}`, 14, 28);
-               doc.text(`Matéria: ${data.title}`, 14, 34);
-               doc.text(`Data: ${new Date().toLocaleDateString()}`, doc.internal.pageSize.width - 60, 20);
+                doc.text(`Professor: ${dbData.configs.professor || 'Não informado'}`, 14, 28);
+                doc.text(`Matéria: ${data.title}`, 14, 34);
+                if (data.applicationDate) {
+                  doc.text(`Data de Aplicação: ${data.applicationDate}`, 14, 40);
+                }
+                doc.text(`Gerado em: ${new Date().toLocaleDateString()}`, doc.internal.pageSize.width - 60, 20);
                autoTable(doc, {
                  head: [data.head],
                  body: data.body,
@@ -1620,8 +1656,16 @@ export default function Dashboard() {
               <option value="">Selecione...</option>
               {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
-            <label className="field-label">Título</label>
-            <input className="input" value={newActData.title} onChange={e => setNewActData({...newActData, title: e.target.value})}/>
+            <div style={{display:'grid', gridTemplateColumns:'2fr 1fr', gap:12}}>
+              <div>
+                <label className="field-label">Título</label>
+                <input className="input" value={newActData.title} onChange={e => setNewActData({...newActData, title: e.target.value})}/>
+              </div>
+              <div>
+                <label className="field-label">Data de Aplicação</label>
+                <input className="input" placeholder="dd/mm/aaaa" value={newActData.applicationDate} onChange={e => setNewActData({...newActData, applicationDate: e.target.value})}/>
+              </div>
+            </div>
             <label className="field-label">Peso</label>
             <input className="input" type="number" step="0.1" value={newActData.weight} onChange={e => setNewActData({...newActData, weight: parseFloat(e.target.value)})}/>
             <label className="field-label">Habilidade AI de Correção</label>
