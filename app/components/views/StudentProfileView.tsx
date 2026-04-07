@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from "react";
-import { ArrowLeft, User, BarChart2, Clock, ChevronDown, ChevronUp, Printer, Star, BookOpen } from "lucide-react";
+import { ArrowLeft, User, BarChart2, Clock, ChevronDown, ChevronUp, Printer, Star, BookOpen, Download } from "lucide-react";
 import { DBData, Student } from "@/lib/types";
 
 interface StudentProfileViewProps {
@@ -37,6 +37,92 @@ export function StudentProfileView({
           stuSubmissions.length
         ).toFixed(1)
       : "0.0";
+
+  const handlePrintAll = () => {
+    const win = window.open("", "_blank");
+    if (!win) return;
+    
+    let html = `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8"/>
+        <title>Prontuário – ${student.name}</title>
+        <style>
+          body { font-family: 'Segoe UI', system-ui, sans-serif; max-width: 800px; margin: 40px auto; color: #1e293b; line-height: 1.6; }
+          .cover { text-align: center; margin-bottom: 60px; padding-bottom: 40px; border-bottom: 2px solid #e2e8f0; }
+          .cover h1 { font-size: 32px; margin-bottom: 8px; color: #0f172a; }
+          .cover p { color: #64748b; font-size: 14px; }
+          
+          .evaluation { padding: 40px 0; border-bottom: 1px dashed #cbd5e1; page-break-after: always; }
+          .evaluation:last-child { border-bottom: none; page-break-after: auto; }
+          
+          .header-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
+          .grade-box { background: #f1f5f9; padding: 16px 24px; border-radius: 12px; text-align: center; min-width: 100px; }
+          .grade-val { font-size: 32px; font-weight: 900; color: #4f46e5; display: block; line-height: 1; }
+          .grade-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; margin-top: 4px; display: block; }
+          
+          .sub-info h2 { font-size: 18px; margin: 0 0 4px 0; color: #0f172a; }
+          .sub-info p { font-size: 13px; color: #64748b; margin: 0; }
+          
+          .act-tag { display: inline-block; background: #eef2ff; color: #4338ca; font-size: 12px; font-weight: 700; padding: 4px 12px; borderRadius: 20px; margin-bottom: 16px; border: 1px solid #c7d2fe; }
+          
+          .feedback-label { font-size: 10px; font-weight: 800; text-transform: uppercase; color: #94a3b8; margin-bottom: 12px; letter-spacing: 0.05em; }
+          .feedback-content { background: #ffffff; border: 1px solid #e2e8f0; padding: 24px; border-radius: 8px; font-size: 14px; white-space: pre-wrap; color: #334155; }
+          
+          .footer { margin-top: 60px; font-size: 10px; color: #94a3b8; text-align: center; }
+          
+          @media print { 
+            body { margin: 20px; } 
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="cover">
+          <h1>Jornada de Aprendizagem</h1>
+          <h2>${student.name}</h2>
+          <p>RA: ${student.ra || "Não informado"} · Emitido em ${new Date().toLocaleDateString("pt-BR")}</p>
+          <div style="margin-top: 24px; display: flex; justify-content: center; gap: 40px;">
+            <div><span style="display:block; font-size:24px; font-weight:800;">${avg}</span><span style="font-size:10px; color:#94a3b8; text-transform:uppercase;">Média Geral</span></div>
+            <div><span style="display:block; font-size:24px; font-weight:800;">${stuSubmissions.length}</span><span style="font-size:10px; color:#94a3b8; text-transform:uppercase;">Avaliações</span></div>
+          </div>
+        </div>
+    `;
+
+    stuSubmissions.forEach(sub => {
+      const actTitle = getActTitle(sub.feedback || "");
+      const content = cleanFeedback(sub.feedback || "");
+      html += `
+        <div class="evaluation">
+          <div class="header-row">
+            <div class="sub-info">
+              <h2>${sub.subject}</h2>
+              <p>Avaliado em ${new Date(sub.submittedAt).toLocaleDateString("pt-BR")}</p>
+            </div>
+            <div class="grade-box">
+              <span class="grade-val">${(sub.grade || 0).toFixed(1)}</span>
+              <span class="grade-label">Nota Final</span>
+            </div>
+          </div>
+          
+          ${actTitle ? `<div class="act-tag">${actTitle}</div>` : ""}
+          
+          <div class="feedback-label">Parecer Pedagógico</div>
+          <div class="feedback-content">${content.replace(/\n/g, "<br/>")}</div>
+        </div>
+      `;
+    });
+
+    html += `
+        <div class="footer">Gerado automaticamente por Aval.IA – Sistema de Inteligência Pedagógica</div>
+        <script>window.onload = () => { window.print(); window.close(); }<\/script>
+      </body>
+      </html>
+    `;
+    win.document.write(html);
+    win.document.close();
+  };
 
   const handlePrint = (sub: any) => {
     const actTitle = getActTitle(sub.feedback || "");
@@ -127,7 +213,7 @@ export function StudentProfileView({
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {dbData.subjects.filter((s) => (student.subjectIds || []).includes(s.id)).map((s) => (
                 <span key={s.id} className="badge" style={{ background: "var(--surface2)", padding: "6px 12px", fontSize: 12 }}>
-                  <BookOpen size={11} style={{ display: "inline", marginRight: 5 }} />{s.name}
+                   <BookOpen size={11} style={{ display: "inline", marginRight: 5 }} />{s.name}
                 </span>
               ))}
             </div>
@@ -140,7 +226,14 @@ export function StudentProfileView({
             <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--text2)" }}>
               Linha do Tempo de Avaliações
             </span>
-            <span style={{ fontSize: 11, color: "var(--text2)" }}>{stuSubmissions.length} avaliação(ões)</span>
+            <button 
+              className="btn-ghost" 
+              onClick={handlePrintAll} 
+              disabled={stuSubmissions.length === 0}
+              style={{ padding: "4px 12px", height: "auto", fontSize: 11, gap: 6, opacity: stuSubmissions.length === 0 ? 0.5 : 1 }}
+            >
+              <Printer size={12}/> Imprimir Prontuário Completo
+            </button>
           </div>
 
           <div style={{ padding: "16px 20px", overflow: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -258,7 +351,7 @@ export function StudentProfileView({
                             style={{ height: 38, padding: "0 18px", fontSize: 13, gap: 8 }}
                             onClick={() => handlePrint(sub)}
                           >
-                            <Printer size={15} /> Imprimir Avaliação
+                            <Printer size={15} /> Imprimir Esta Avaliação
                           </button>
                         </div>
                       </div>
