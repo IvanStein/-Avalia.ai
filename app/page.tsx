@@ -9,16 +9,31 @@ import {
 } from "lucide-react";
 
 // â”€â”€ TYPES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-interface Subject       { id: string; name: string; code: string; syllabus?: string; closed?: boolean; }
-interface Student       { id: string; name: string; email: string; ra?: string; turma?: string; subjectIds?: string[]; }
-interface Activity      { id: string; subjectId: string; title: string; weight: number; description?: string; }
-interface Implementacao { id: string; title: string; description: string; status: string; priority: string; createdAt: string; category?: string; imageUrl?: string; }
-interface AppConfig     { system_name: string; primary_color: string; theme?: 'light' | 'dark'; institution?: string; professor?: string; pedagogical_style?: string; }
-interface Turma         { id: string; name: string; studentIds: string[]; }
-interface Implementacao { id: string; title: string; description: string; status: string; priority: string; createdAt: string; }
-interface Submission    { id: string; studentName: string; subject: string; submittedAt: string; status: 'pending'|'grading'|'graded'|'error'|'audit_pending'|'audited'; grade?: number; feedback?: string; source: 'pdf'|'drive'; auditNotes?: string; }
+import { 
+  Subject, Student, Activity, Skill, Implementacao, 
+  AppConfig, Submission, DBData, View 
+} from "@/lib/types";
 
-interface BatchEntry {
+// Componentes Modulares
+import { Sidebar } from "./components/Sidebar";
+import { SubjectsView } from "./components/views/SubjectsView";
+import { StudentsView } from "./components/views/StudentsView";
+import { ActivitiesView } from "./components/views/ActivitiesView";
+import { EnrollmentView } from "./components/views/EnrollmentView";
+import { DashboardView } from "./components/views/DashboardView";
+import { SkillsView } from "./components/views/SkillsView";
+import { ImplementacoesView } from "./components/views/ImplementacoesView";
+import { ConsolidatedActivityView } from "./components/views/ConsolidatedActivityView";
+import { AuditView } from "./components/views/AuditView";
+import { BatchView } from "./components/views/BatchView";
+import { CanvasAssistantView } from "./components/views/CanvasAssistantView";
+import { ManualGradingView } from "./components/views/ManualGradingView";
+import { CopyActivitiesView } from "./components/views/CopyActivitiesView";
+import { ReportsView } from "./components/views/ReportsView";
+import { StudentProfileView } from "./components/views/StudentProfileView";
+import { getStatusConfig } from "./components/StatusPill";
+
+export interface BatchEntry {
   id: string;
   filename: string;
   file: File;
@@ -31,23 +46,6 @@ interface BatchEntry {
   error?: string;
 }
 
-interface DBData {
-  subjects: Subject[];
-  students: Student[];
-  activities: Activity[];
-  implementacoes: Implementacao[];
-  submissions: Submission[];
-  configs: AppConfig;
-}
-
-const STATUS_CONFIG = {
-  pending:       { label: 'Aguardando',    icon: Clock,        color: '#f59e0b' },
-  grading:       { label: 'Corrigindo...', icon: Sparkles,     color: '#6366f1' },
-  graded:        { label: 'Corrigido',     icon: CheckCircle,  color: '#10b981' },
-  error:         { label: 'Erro',          icon: AlertCircle,  color: '#ef4444' },
-  audit_pending: { label: 'Em Auditoria',  icon: AlertCircle,  color: '#f59e0b' },
-  audited:       { label: 'Auditado',      icon: CheckCircle,  color: '#10b981' },
-};
 
 const IMPL_STATUS: Record<string, { label: string; color: string }> = {
   backlog:     { label: 'Backlog',      color: '#8b90a0' },
@@ -63,8 +61,8 @@ const PRIORITY_CONFIG: Record<string, { label: string; cls: string }> = {
 };
 
 const EMPTY_DB: DBData = { 
-  subjects: [], students: [], activities: [], implementacoes: [], submissions: [], 
-  configs: { system_name: 'Aval.IA', primary_color: '#6366f1', theme: 'dark' } 
+  subjects: [], students: [], activities: [], implementacoes: [], submissions: [], skills: [],
+  configs: { theme: 'dark', primary_color: '#6366f1', institution_name: 'Aval.IA' } 
 };
 
 // â”€â”€ HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -126,7 +124,6 @@ function syllabusChunks(raw: string): string[] {
 
 // â”€â”€ COMPONENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function Dashboard() {
-  type View = 'dashboard'|'subjects'|'students'|'enrollment'|'activities'|'batch'|'implementacoes'|'settings'|'copy'|'reports'|'student-profile'|'manual'|'canvas'|'audit';
   const [view, setView] = useState<View>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
@@ -142,12 +139,14 @@ export default function Dashboard() {
   const [showStudentModal, setShowStudentModal] = useState(false);
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [showImplModal, setShowImplModal] = useState(false);
+  const [showSkillModal, setShowSkillModal] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
 
   // Edit states
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
+  const [editingSkill, setEditingSkill] = useState<Skill | null>(null);
   const [editingImpl, setEditingImpl] = useState<Implementacao | null>(null);
 
   // Forms
@@ -157,7 +156,8 @@ export default function Dashboard() {
   const [syllabusTarget, setSyllabusTarget] = useState<Subject | null>(null);
 
   const [newStuData, setNewStuData] = useState({ name: '', email: '', ra: '', turma: '' });
-  const [newActData, setNewActData] = useState({ subjectId: '', title: '', weight: 1, description: '' });
+  const [newActData, setNewActData] = useState({ subjectId: '', title: '', weight: 1, description: '', skillId: '' });
+  const [newSkillData, setNewSkillData] = useState({ name: '', description: '', promptTemplate: '', model: 'gemini-1.5-flash', responseType: 'text' });
   const [newImpl, setNewImpl] = useState({ title: '', description: '', priority: 'media', category: '', imageUrl: '' });
   const [tempConfigs, setTempConfigs] = useState<AppConfig>(EMPTY_DB.configs);
 
@@ -258,18 +258,34 @@ export default function Dashboard() {
         });
     }
 
-    const gradedSubmissions = dbData.submissions.filter(subm => 
-      subm.subject === sub?.name && subm.status === 'graded' &&
-      (reportType === 'activity' ? getActName(subm.feedback || '') === act?.title : true)
+    // Filtra submissões válidas (corrigidas e da matéria em questão)
+    const rawGradedSubmissions = dbData.submissions.filter(subm => 
+      subm.subject === sub?.name && subm.status === 'graded'
     );
+
+    // Garante unicidade por (aluno, atividade) para bater com a lógica exibida na tabela
+    const uniqueMap = new Map<string, Submission>();
+    rawGradedSubmissions.forEach(subm => {
+       const aTitle = getActName(subm.feedback || '') || 'Geral';
+       // Se o relatório for de atividade específica, ignora as outras
+       if (reportType === 'activity' && aTitle !== act?.title) return;
+       
+       const key = `${subm.studentName}-${aTitle}`;
+       // Mantém apenas a primeira encontrada (padrão do .find() usado na tabela)
+       if (!uniqueMap.has(key)) uniqueMap.set(key, subm);
+    });
+
+    const gradedSubmissions = Array.from(uniqueMap.values());
+    const subjectStudents = dbData.students.filter(s => (s.subjectIds || []).includes(reportSubjectId));
+    const studentsWithDelivery = new Set(gradedSubmissions.map(gs => gs.studentName));
     
     const stats = {
       totalGraded: gradedSubmissions.length,
       classAvg: gradedSubmissions.length > 0 
         ? (gradedSubmissions.reduce((acc, curr) => acc + (curr.grade || 0), 0) / gradedSubmissions.length).toFixed(1)
         : '0.0',
-      participation: dbData.students.filter(s => (s.subjectIds || []).includes(reportSubjectId)).length > 0
-        ? ((new Set(gradedSubmissions.map(gs => gs.studentName)).size / dbData.students.filter(s => (s.subjectIds || []).includes(reportSubjectId)).length) * 100).toFixed(0)
+      participation: subjectStudents.length > 0
+        ? ((studentsWithDelivery.size / subjectStudents.length) * 100).toFixed(0)
         : '0'
     };
 
@@ -290,6 +306,7 @@ export default function Dashboard() {
         activities:      data.activities      ?? [],
         implementacoes:  data.implementacoes  ?? [],
         submissions:     data.submissions     ?? [],
+        skills:          data.skills          ?? [],
         configs:         data.configs         ?? EMPTY_DB.configs,
       });
       
@@ -443,6 +460,12 @@ export default function Dashboard() {
     }
   };
 
+  const toggleSubjectClosed = async (id: string, closed: boolean) => {
+    setDbData(prev => ({ ...prev, subjects: prev.subjects.map(s => s.id === id ? { ...s, closed: closed } : s) }));
+    try { await apiPost('subject-closed', { id, closed }); } 
+    catch(e:any) { alert(e.message); await fetchDB(); }
+  };
+
   const handleSyllabusImport = async (subject: Subject, file: File) => {
     try {
       await uploadSyllabus(subject.id, file);
@@ -566,8 +589,8 @@ export default function Dashboard() {
 
   // â”€â”€ ACTIVITY ACTIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const openActivityModal = (a?: Activity) => {
-    if (a) { setEditingActivity(a); setNewActData({ subjectId: a.subjectId, title: a.title, weight: a.weight, description: a.description || '' }); }
-    else { setEditingActivity(null); setNewActData({ subjectId: '', title: '', weight: 1, description: '' }); }
+    if (a) { setEditingActivity(a); setNewActData({ subjectId: a.subjectId, title: a.title, weight: a.weight, description: a.description || '', skillId: a.skillId || '' }); }
+    else { setEditingActivity(null); setNewActData({ subjectId: '', title: '', weight: 1, description: '', skillId: '' }); }
     setShowActivityModal(true);
   };
   const saveActivity = async () => {
@@ -579,6 +602,42 @@ export default function Dashboard() {
         await apiPost('activity', newActData);
       }
       setShowActivityModal(false); await fetchDB();
+    } catch (e: any) { alert('Erro: ' + e.message); }
+  };
+
+  // ── SKILL ACTIONS ──────────────────────────────────────────────────────────
+  const openSkillModal = (s?: Skill) => {
+    if (s) { 
+      setEditingSkill(s); 
+      setNewSkillData({ 
+        name: s.name, 
+        description: s.description, 
+        promptTemplate: s.promptTemplate, 
+        model: s.model, 
+        responseType: s.responseType 
+      }); 
+    }
+    else { 
+      setEditingSkill(null); 
+      setNewSkillData({ 
+        name: '', 
+        description: '', 
+        promptTemplate: '', 
+        model: 'gemini-1.5-flash', 
+        responseType: 'text' 
+      }); 
+    }
+    setShowSkillModal(true);
+  };
+  const saveSkill = async () => {
+    if (!newSkillData.name || !newSkillData.promptTemplate) return alert('Preencha nome e template do prompt');
+    try {
+      if (editingSkill) {
+        await apiPost('skill-update', { id: editingSkill.id, ...newSkillData });
+      } else {
+        await apiPost('skill', newSkillData);
+      }
+      setShowSkillModal(false); await fetchDB();
     } catch (e: any) { alert('Erro: ' + e.message); }
   };
 
@@ -817,6 +876,33 @@ export default function Dashboard() {
     setView('manual');
   };
 
+  const handleManualSave = async () => {
+    if (!manuStu || !manuSub) return alert('Selecione aluno e matéria');
+    setManuSaving(true);
+    try {
+      const stu = dbData.students.find(s => s.id === manuStu);
+      const sub = dbData.subjects.find(s => s.id === manuSub);
+      const act = dbData.activities.find(a => a.id === manuAct);
+      if (!stu || !sub) throw new Error('Dados inválidos');
+
+      const activityPrefix = act ? `Atividade: ${act.title}\n` : '';
+      await apiPost('submission', {
+        studentName: stu.name,
+        subject: sub.name,
+        status: "graded",
+        grade: parseFloat(manuGrade),
+        feedback: activityPrefix + manuFeed,
+        source: "pdf", 
+        submittedAt: new Date().toISOString().split("T")[0],
+      });
+      alert('Nota lançada com sucesso!');
+      setManuGrade('0.0'); setManuFeed('');
+      fetchDB();
+      setView('dashboard');
+    } catch (e:any) { alert(e.message); }
+    setManuSaving(false);
+  };
+
   const handleCopyActivities = async () => {
     if (!copySubjectId || (!copyDestSubjectId && !newSubjectName)) {
       return alert('Selecione a matéria de origem e o destino (ou nome da nova matéria).');
@@ -935,46 +1021,15 @@ export default function Dashboard() {
 
   if (!hasMounted) return null;
 
-  // â”€â”€ NAV â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const NavItem = ({ v, icon: Icon, label }: { v: View; icon: any; label: string }) => (
-    <button className={`nav-item ${view === v ? 'active' : ''}`} onClick={() => setView(v)}>
-      <Icon size={18} strokeWidth={1.8} /> <span>{label}</span>
-    </button>
-  );
 
   return (
     <div className="app">
-      {/* â”€â”€ SIDEBAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <div className="logo"><GraduationCap size={26} strokeWidth={1.5}/><span>Aval.IA</span></div>
-          <button className="btn-icon" onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>
-            {sidebarCollapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}
-          </button>
-        </div>
-        <nav className="nav">
-          <p className="nav-label">Visão Geral</p>
-          <NavItem v="dashboard"      icon={BookOpen}    label="Dashboard"/>
-          <p className="nav-label">Entidades</p>
-          <NavItem v="subjects"       icon={FileText}    label="Matérias"/>
-          <NavItem v="students"       icon={UserPlus}    label="Alunos"/>
-          <NavItem v="enrollment"     icon={Users}       label="Enturmação"/>
-          <NavItem v="activities"     icon={Clock}       label="Atividades"/>
-          <p className="nav-label">Trabalho</p>
-          <NavItem v="batch"          icon={Layers}      label="Correção"/>
-          <NavItem v="manual"         icon={Edit2}       label="Lançamento Manual"/>
-          <NavItem v="canvas"         icon={Copy}        label="Assistente Canvas"/>
-          <NavItem v="audit"          icon={AlertCircle} label="Auditoria"/>
-          <NavItem v="copy"           icon={Layers}      label="Copia de Atividades"/>
-          <NavItem v="reports"        icon={BarChart2}   label="Relatórios"/>
-          <p className="nav-label">Sistema</p>
-          <NavItem v="implementacoes" icon={Lightbulb}   label="Implementações"/>
-          <NavItem v="settings"       icon={Database}    label="Configurações"/>
-        </nav>
-        <div className="sidebar-footer-text" style={{marginTop: 'auto', paddingTop: 16, borderTop: '1px solid var(--border)', textAlign: 'center', fontSize: 10, color: 'var(--text2)', fontFamily: 'monospace'}}>
-          v0.1.0-alpha.1
-        </div>
-      </aside>
+      <Sidebar 
+        view={view} 
+        setView={setView} 
+        collapsed={sidebarCollapsed} 
+        setCollapsed={setSidebarCollapsed} 
+      />
 
 
       {/* â•â• MAIN â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
@@ -991,1492 +1046,288 @@ export default function Dashboard() {
         )}
 
         {/* â•â• DASHBOARD â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
-        {view === 'dashboard' && <>
-          <header className="header">
-            <div><h1>Painel de Avaliações</h1><p className="subtitle">Visão Geral do Sistema</p></div>
-            <button className="btn-primary" onClick={() => setShowUpload(true)}><Upload size={16}/> Novo Trabalho</button>
-          </header>
-
-          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:16,marginBottom:24}} className="fade-in">
-            <div style={{background:'var(--surface2)',padding:'20px 24px',borderRadius:14,border:'1px solid var(--border)',display:'flex',flexDirection:'column',gap:12}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <h3 style={{fontSize:12,color:'var(--text2)',fontWeight:500,textTransform:'uppercase',letterSpacing:'.05em'}}>Total de Alunos</h3>
-                <div style={{background:'#6366f120',borderRadius:8,padding:6}}><Users size={15} color="#6366f1"/></div>
-              </div>
-              <p style={{fontSize:32,fontWeight:700,lineHeight:1}}>{dbData.students.length}</p>
-            </div>
-            <div style={{background:'var(--surface2)',padding:'20px 24px',borderRadius:14,border:'1px solid var(--border)',display:'flex',flexDirection:'column',gap:12}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <h3 style={{fontSize:12,color:'var(--text2)',fontWeight:500,textTransform:'uppercase',letterSpacing:'.05em'}}>Total de Matérias</h3>
-                <div style={{background:'#10b98120',borderRadius:8,padding:6}}><BookOpen size={15} color="#10b981"/></div>
-              </div>
-              <p style={{fontSize:32,fontWeight:700,lineHeight:1}}>{dbData.subjects.length}</p>
-            </div>
-            <div style={{background:'var(--surface2)',padding:'20px 24px',borderRadius:14,border:'1px solid var(--border)',display:'flex',flexDirection:'column',gap:12}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <h3 style={{fontSize:12,color:'var(--text2)',fontWeight:500,textTransform:'uppercase',letterSpacing:'.05em'}}>Total de Avaliações</h3>
-                <div style={{background:'#f59e0b20',borderRadius:8,padding:6}}><Layers size={15} color="#f59e0b"/></div>
-              </div>
-              <p style={{fontSize:32,fontWeight:700,lineHeight:1}}>{dbData.activities.length}</p>
-            </div>
-            <div style={{background:'var(--surface2)',padding:'20px 24px',borderRadius:14,border:'1px solid var(--border)',display:'flex',flexDirection:'column',gap:12}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <h3 style={{fontSize:12,color:'var(--text2)',fontWeight:500,textTransform:'uppercase',letterSpacing:'.05em'}}>Correções Realizadas</h3>
-                <div style={{background:'#10b98120',borderRadius:8,padding:6}}><CheckCircle size={15} color="#10b981"/></div>
-              </div>
-              <p style={{fontSize:32,fontWeight:700,lineHeight:1}}>{dbData.submissions.filter(s => s.status === 'graded').length}</p>
-            </div>
-          </div>
-
-          <h2 style={{fontSize:16, marginBottom:20, display:'flex', alignItems:'center', gap:8}}>
-            <Layers size={18} color="var(--accent)"/> Histórico de Correções Agrupadas
-          </h2>
-          
-          <div className="fade-in" style={{display:'flex', flexDirection:'column', gap:28}}>
-            {dbData.subjects.filter(sub => dbData.submissions.some(s => s.subject === sub.name)).sort((a,b) => b.name.localeCompare(a.name)).map(subject => {
-              const subjectSubs = dbData.submissions.filter(s => s.subject === subject.name);
-              const isSubExpanded = !!expandedSubjects[subject.id];
-              
-              // Group submissions of this subject by activity
-              const activityGroups = subjectSubs.reduce((acc, sub) => {
-                const firstLine = sub.feedback?.split('\n')[0] || '';
-                const actName = firstLine.includes('Atividade:') 
-                  ? firstLine.replace('Atividade:', '').trim() 
-                  : 'Geral';
-                if (!acc[actName]) acc[actName] = [];
-                acc[actName].push(sub);
-                return acc;
-              }, {} as Record<string, Submission[]>);
-
-              return (
-                <div key={subject.id} className="card" style={{padding:0, overflow:'hidden', border:'1px solid var(--border)'}}>
-                  <div 
-                    style={{background:'var(--surface2)', padding:'12px 20px', borderBottom: isSubExpanded ? '1px solid var(--border)' : 'none', display:'flex', justifyContent:'space-between', alignItems:'center', cursor:'pointer'}}
-                    onClick={() => setExpandedSubjects(prev => ({...prev, [subject.id]: !prev[subject.id]}))}
-                  >
-                    <h3 style={{fontSize:14, fontWeight:700, color:'var(--accent)', display:'flex', alignItems:'center', gap:8}}>
-                      {isSubExpanded ? <ChevronDown size={16}/> : <ChevronRight size={16}/>}
-                      <BookOpen size={16}/> {subject.name}
-                    </h3>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <span className="badge" style={{fontSize:10}}>{subjectSubs.length} correções</span>
-                      <button 
-                        className="btn-icon-danger" 
-                        style={{ padding: '2px 8px', height: 'auto', fontSize: 10, background: '#ef444415' }} 
-                        onClick={(e) => { e.stopPropagation(); deleteActivityCorrections(subject.name); }}
-                        title={`Apagar todas as correções de ${subject.name}`}
-                      >
-                        <Trash2 size={12}/> Limpar Matéria
-                      </button>
-                    </div>
-                  </div>
-                  
-                  {isSubExpanded && (
-                    <div style={{padding:'10px 20px 20px'}}>
-                      {Object.entries(activityGroups)
-                        .sort((a, b) => b[0].localeCompare(a[0], undefined, { numeric: true, sensitivity: 'base' }))
-                        .map(([actTitle, subs]) => {
-                        const actId = `${subject.id}-${actTitle}`;
-                        const isActExpanded = !!expandedActivities[actId];
-                        return (
-                          <div key={actTitle} style={{marginTop:16}}>
-                            <div 
-                              style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10, cursor:'pointer'}}
-                              onClick={() => setExpandedActivities(prev => ({...prev, [actId]: !prev[actId]}))}
-                            >
-                              <h4 style={{fontSize:12, fontWeight:600, color:'var(--text1)', display:'flex', alignItems:'center', gap:6, opacity:0.8}}>
-                                {isActExpanded ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
-                                <Sparkles size={14} color="#10b981"/> {actTitle}
-                              </h4>
-                              <button 
-                                className="btn-icon-danger" 
-                                style={{padding:4, height:'auto', width:'auto'}} 
-                                title={`Apagar todas as ${subs.length} correções de ${actTitle}`}
-                                onClick={(e) => { e.stopPropagation(); deleteActivityCorrections(subject.name, actTitle); }}
-                              >
-                                <Trash2 size={12}/> <span style={{fontSize:10}}>Limpar Atividade</span>
-                              </button>
-                            </div>
-                            
-                            {isActExpanded && (
-                              <div className="table-wrap fade-in" style={{border:'none', borderRadius:8, background:'var(--bg)'}}>
-                                <table className="table table-sm">
-                                  <thead>
-                                    <tr><th>Aluno</th><th>Nota</th><th>Data</th><th style={{textAlign:'right'}}>Ações</th></tr>
-                                  </thead>
-                                  <tbody>
-                                    {subs.sort((a,b) => b.submittedAt.localeCompare(a.submittedAt)).map(sub => {
-                                      const cfg = STATUS_CONFIG[sub.status] ?? STATUS_CONFIG.pending;
-                                      return (
-                                        <tr key={sub.id} className={selected?.id === sub.id ? 'selected' : ''} onClick={() => setSelected(sub)} style={{cursor:'pointer'}}>
-                                          <td className="td-name" style={{fontSize:13}}>
-                                            {sub.studentName}
-                                          </td>
-                                          <td>
-                                            <span className="status-pill" style={{background:cfg.color+'18',color:cfg.color, fontSize:11, padding:'2px 8px'}}>
-                                              <cfg.icon size={11}/> {sub.grade?.toFixed(1) ?? '—'}
-                                            </span>
-                                          </td>
-                                          <td className="td-muted" style={{fontSize:11}}>{sub.submittedAt.split(' ')[0]}</td>
-                                          <td>
-                                            <div className="actions" onClick={e => e.stopPropagation()} style={{justifyContent:'flex-end'}}>
-                                              <button className="btn-icon" onClick={() => setSelected(sub)} title="Ver Detalhes"><ChevronRight size={14}/></button>
-                                              <button className="btn-icon-danger" onClick={() => del('submission', sub.id)} title="Excluir"><Trash2 size={14}/></button>
-                                            </div>
-                                          </td>
-                                        </tr>
-                                      );
-                                    })}
-                                  </tbody>
-                                </table>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-            
-            {dbData.submissions.length === 0 && (
-              <div className="empty-state" style={{background:'var(--surface)', borderRadius:12, padding:40, border:'1px dashed var(--border)'}}>
-                <Layers size={40} style={{opacity:0.2, marginBottom:16}}/>
-                <p>Nenhuma correção registrada no sistema.</p>
-                <button className="btn-primary" style={{marginTop:16}} onClick={() => setView('batch')}>Iniciar Nova Correção</button>
-              </div>
-            )}
-          </div>
-        </>}
+        {view === 'dashboard' && (
+          <>
+            <DashboardView 
+              dbData={dbData}
+              onSetView={setView}
+              onOpenUpload={() => setShowUpload(true)}
+              onOpenStudentModal={() => openStudentModal()}
+              onSelectSubmission={setSelected}
+              getStatusConfig={getStatusConfig}
+              getActName={getActName}
+            />
+            <ConsolidatedActivityView 
+              dbData={dbData}
+              expandedSubjects={expandedSubjects}
+              setExpandedSubjects={setExpandedSubjects}
+              expandedActivities={expandedActivities}
+              setExpandedActivities={setExpandedActivities}
+              onSelectSubmission={setSelected}
+              onDeleteSubmission={(id) => del('submission', id)}
+              onNavigateToBatch={() => setView('batch')}
+              getStatusConfig={getStatusConfig}
+              getActName={getActName}
+            />
+          </>
+        )}
 
         {/* â•â• RELATÓRIOS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
 
 
         {/* â•â• MATÉRIAS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
-        {view === 'subjects' && <>
-          <header className="header">
-            <div><h1>Matérias</h1><p className="subtitle">{dbData.subjects.length} disciplinas</p></div>
-            <button className="btn-primary" onClick={() => openSubjectModal()}><Plus size={16}/> Nova Matéria</button>
-          </header>
-          <div className="table-wrap fade-in">
-            <table className="table">
-              <thead><tr><th>Nome</th><th>Código</th><th>Ementa</th><th></th></tr></thead>
-              <tbody>
-                {dbData.subjects.length === 0
-                  ? <tr><td colSpan={4}><div className="empty-state"><FileText size={40}/><p>Nenhuma matéria.</p></div></td></tr>
-                  : dbData.subjects.map(s => {
-                    const chunks = syllabusChunks(s.syllabus ?? '');
-                    return (
-                      <tr key={s.id}>
-                        <td className="td-name">{s.name}</td>
-                        <td className="td-muted">{s.code}</td>
-                        <td>
-                          {chunks.length > 0
-                            ? <span className="syllabus-chip"><CheckCircle size={11}/> {chunks.length} chunks</span>
-                            : <span style={{fontSize:11,color:'var(--text2)'}}>Sem ementa</span>
-                          }
-                        </td>
-                        <td>
-                          <div className="actions">
-                            <button className="btn-icon" onClick={() => openSubjectModal(s)}><Edit2 size={13}/></button>
-                            <button className="btn-icon" title="Importar ementa" onClick={() => setSyllabusTarget(s)}><Upload size={13}/></button>
-                            <button className="btn-icon-danger" onClick={() => del('subject', s.id)}><Trash2 size={14}/></button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                }
-              </tbody>
-            </table>
-          </div>
-        </>}
+        {view === 'subjects' && (
+          <SubjectsView 
+            subjects={dbData.subjects}
+            onOpenModal={openSubjectModal}
+            onDelete={(id) => del('subject', id)}
+            onSetSyllabusTarget={setSyllabusTarget}
+            syllabusChunks={syllabusChunks}
+          />
+        )}
 
         {/* â•â• ALUNOS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
-        {view === 'students' && <>
-          <header className="header">
-            <div><h1>Alunos</h1><p className="subtitle">{dbData.students.length} estudantes</p></div>
-            <div className="header-actions">
-              <button className="btn-ghost" onClick={extractRAFromName} title="Extrai o número após o '-' do nome e coloca no campo RA">
-                <Hash size={16}/> Extrair RA do Nome
-              </button>
-              <label className="btn-ghost" style={{cursor:'pointer', position:'relative', overflow:'hidden'}}>
-                <Upload size={16}/> Importar (TXT/CSV)
-                <input type="file" accept=".txt,.csv" style={{position:'absolute',opacity:0,width:1,height:1,left:0,top:0}} onChange={handleStudentsImport}/>
-              </label>
-              <button className="btn-primary" onClick={() => openStudentModal()}><UserPlus size={16}/> Novo Aluno</button>
-            </div>
-          </header>
-          <div className="table-wrap fade-in">
-            <table className="table">
-              <thead><tr><th>Nome</th><th>RA</th><th>Email</th><th>Turma</th><th>Matéria</th><th></th></tr></thead>
-              <tbody>
-                {dbData.students.length === 0
-                  ? <tr><td colSpan={5}><div className="empty-state"><UserPlus size={40}/><p>Nenhum aluno.</p></div></td></tr>
-                  : [...dbData.students].sort((a,b) => a.name.localeCompare(b.name)).map(s => {
-                    const subId = (s.subjectIds || [])[0];
-                    const sub = subId ? dbData.subjects.find(x => x.id === subId) : null;
-                    return (
-                      <tr key={s.id}>
-                        <td className="td-name">{s.name}</td>
-                        <td style={{fontSize:12, fontWeight:600}}>{s.ra || <span style={{opacity:0.3}}>—</span>}</td>
-                        <td className="td-muted">{s.email}</td>
-                        <td>{!s.turma ? <span style={{fontSize:11,color:'var(--text2)'}}>Sem turma</span> : <span className="badge badge-blue">{s.turma}</span>}</td>
-                        <td>{sub ? <span className="badge-subject">{sub.name}</span> : <span style={{fontSize:11,color:'var(--text2)'}}>Livre</span>}</td>
-                        <td>
-                          <div className="actions">
-                            <button className="btn-icon" onClick={() => openStudentModal(s)}><Edit2 size={13}/></button>
-                            <button className="btn-icon-danger" onClick={() => del('student', s.id)}><Trash2 size={14}/></button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-              </tbody>
-            </table>
-          </div>
-        </>}
+        {view === 'students' && (
+          <StudentsView 
+            students={dbData.students}
+            subjects={dbData.subjects}
+            onOpenModal={openStudentModal}
+            onDelete={(id) => del('student', id)}
+            onExtractRA={extractRAFromName}
+            onImport={handleStudentsImport}
+          />
+        )}
 
         {/* â•â• ATIVIDADES â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•= */}
-        {view === 'activities' && <>
-          <header className="header">
-            <div><h1>Atividades</h1><p className="subtitle">{dbData.activities.length} avaliações</p></div>
-            <div className="header-actions">
-              <button className="btn-ghost" onClick={() => setShowImportActModal(true)}><Sparkles size={16}/> Importar da Ementa</button>
-              <button className="btn-primary" onClick={() => openActivityModal()}><Plus size={16}/> Nova Atividade</button>
-            </div>
-          </header>
-          <div className="table-wrap fade-in">
-            <table className="table" style={{tableLayout:'fixed'}}>
-              <thead><tr><th style={{width:'35%'}}>Título</th><th style={{width:'25%'}}>Matéria</th><th style={{width:'8%'}}>Peso</th><th style={{width:'25%'}}>Critério IA</th><th style={{width:'7%', textAlign:'right'}}></th></tr></thead>
-              <tbody>
-                {dbData.activities.length === 0
-                  ? <tr><td colSpan={5}><div className="empty-state"><Clock size={40}/><p>Nenhuma atividade.</p></div></td></tr>
-                  : dbData.activities.map(a => {
-                    const sub = dbData.subjects.find(s => s.id === a.subjectId);
-                    return (
-                      <tr key={a.id}>
-                        <td className="td-name">{a.title}</td>
-                        <td><span className="badge-subject">{sub?.name ?? a.subjectId}</span></td>
-                        <td className="td-muted">{a.weight}×</td>
-                        <td className="td-desc">{a.description || <span style={{opacity:.4}}>—</span>}</td>
-                        <td>
-                          <div className="actions">
-                            <button className="btn-icon" onClick={() => openActivityModal(a)}><Edit2 size={13}/></button>
-                            <button className="btn-icon-danger" onClick={() => del('activity', a.id)}><Trash2 size={14}/></button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                }
-              </tbody>
-            </table>
-          </div>
-        </>}
+        {view === 'activities' && (
+          <ActivitiesView 
+            activities={dbData.activities}
+            subjects={dbData.subjects}
+            onOpenModal={openActivityModal}
+            onDelete={(id) => del('activity', id)}
+            onImportFromSyllabus={() => setShowImportActModal(true)}
+          />
+        )}
 
         {/* â•â• ENTURMAÇÃO â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•= */}
-        {view === 'enrollment' && <>
-          <header className="header" style={{flexDirection:'column', alignItems:'flex-start', gap:16}}>
-            <div><h1>Enturmação</h1><p className="subtitle">Associe alunos a matérias clicando duas vezes sobre o card.</p></div>
-            <div style={{display:'flex', gap:16, alignItems:'center', flexWrap:'wrap'}}>
-              <select className="input" style={{maxWidth:300, background:'var(--surface)'}} value={enrollSubjectId} onChange={e => setEnrollSubjectId(e.target.value)}>
-                <option value="">-- Selecione uma matéria --</option>
-                {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code}) {s.closed ? '🔒' : ''}</option>)}
-              </select>
-
-              {enrollSubjectId && (() => {
-                const sub = dbData.subjects.find(s => s.id === enrollSubjectId);
-                return (
-                  <label style={{display:'flex', alignItems:'center', gap:8, cursor:'pointer', padding:'8px 12px', background:'var(--surface)', borderRadius:8, border:'1px solid var(--border)'}}>
-                    <input type="checkbox" checked={!!sub?.closed} onChange={async () => {
-                      if (!sub) return;
-                      const newClosed = !sub.closed;
-                      setDbData(prev => ({ ...prev, subjects: prev.subjects.map(s => s.id === sub.id ? { ...s, closed: newClosed } : s) }));
-                      try { await apiPost('subject-closed', { id: sub.id, closed: newClosed }); } 
-                      catch(e:any) { alert(e.message); await fetchDB(); }
-                    }} />
-                    <span>Bloquear Enturmação (Matéria Fechada)</span>
-                  </label>
-                );
-              })()}
-            </div>
-          </header>
-
-          {!enrollSubjectId ? (
-            <div className="empty-state"><Users size={40}/><p>Selecione uma matéria acima para começar a enturmar.</p></div>
-          ) : (() => {
-            const subject = dbData.subjects.find(s => s.id === enrollSubjectId);
-            const isClosed = !!subject?.closed;
-            const inSubject = dbData.students.filter(s => (s.subjectIds||[]).includes(enrollSubjectId)).sort((a,b) => a.name.localeCompare(b.name));
-            const notInSubject = dbData.students.filter(s => !(s.subjectIds||[]).length).sort((a,b) => a.name.localeCompare(b.name)); // ONLY those with NO subject
-
-            const StudentCard = ({ s, onDoubleClick }: { s: Student; onDoubleClick: () => void }) => {
-              return (
-                <div 
-                  className="kanban-card" 
-                  style={{cursor: isClosed ? 'not-allowed' : 'pointer', userSelect:'none', display:'flex', justifyContent:'space-between', alignItems:'center', opacity: isClosed ? 0.6 : 1}}
-                  onDoubleClick={isClosed ? undefined : onDoubleClick}
-                  title={isClosed ? 'Matéria fechada para edição' : 'Dê um duplo-clique para mover'}
-                >
-                  <div>
-                    <p className="kanban-card-title">{s.name}</p>
-                    <p style={{fontSize:10, color:'var(--text2)'}}>
-                      {s.turma || 'Livre'}
-                    </p>
-                  </div>
-                  <Users size={14} style={{opacity:0.3}}/>
-                </div>
-              );
-            };
-
-            return (
-              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:24}} className="fade-in">
-                <div style={{background:'var(--surface)', padding:16, borderRadius:12, border:'1px solid var(--border)', display:'flex', flexDirection:'column'}}>
-                  <h3 style={{marginBottom:16, display:'flex', alignItems:'center', gap:8}}><UserPlus size={16}/> Não Enturmados <span className="badge">{notInSubject.length}</span></h3>
-                  <div style={{display:'flex', flexDirection:'column', gap:8, flex:1, overflowY:'auto'}}>
-                    {notInSubject.map(s => <StudentCard key={s.id} s={s} onDoubleClick={() => toggleStudentEnrollment(s)}/>)}
-                    {notInSubject.length === 0 && <p style={{fontSize:12, color:'var(--text2)', textAlign:'center', marginTop:20}}>Todos os alunos cadastrados já estão nesta matéria.</p>}
-                  </div>
-                </div>
-
-                <div style={{background:'var(--surface)', padding:16, borderRadius:12, border:'1px dashed var(--accent)', display:'flex', flexDirection:'column'}}>
-                  <h3 style={{marginBottom:16, display:'flex', alignItems:'center', gap:8}}><CheckCircle size={16} color="var(--accent)"/> Em {subject?.name} <span className="badge badge-blue">{inSubject.length}</span></h3>
-                  <div style={{display:'flex', flexDirection:'column', gap:8, flex:1, overflowY:'auto'}}>
-                    {inSubject.map(s => <StudentCard key={s.id} s={s} onDoubleClick={() => toggleStudentEnrollment(s)}/>)}
-                    {inSubject.length === 0 && <p style={{fontSize:12, color:'var(--text2)', textAlign:'center', marginTop:20}}>Nenhum aluno associado. Dê 2 cliques num card ao lado.</p>}
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-        </>}
+        {view === 'enrollment' && (
+          <EnrollmentView 
+            subjects={dbData.subjects}
+            students={dbData.students}
+            enrollSubjectId={enrollSubjectId}
+            setEnrollSubjectId={setEnrollSubjectId}
+            onToggleSubjectClosed={toggleSubjectClosed}
+            onToggleStudentEnrollment={toggleStudentEnrollment}
+          />
+        )}
 
 
 
         {/* â•â• CORREÇÃO EM LOTE â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•= */}
         {view === 'batch' && (
-          <div className="fade-in">
-            <header className="header" style={{ marginBottom: 24 }}>
-              <div>
-                <h1>Correção</h1>
-                <p className="subtitle">
-                  {batchStep === 'upload' && "Fase 1: Upload e Identificação"}
-                  {batchStep === 'validate' && "Fase 2: Validação de Contexto"}
-                  {batchStep === 'results' && "Fase 3: Resultados e Feedbacks"}
-                </p>
-              </div>
-              <div className="header-actions">
-                <button className="btn-ghost" onClick={saveBatchAndExit} title="Salva o progresso e volta para a dashboard">
-                  <RefreshCw size={15}/> Salvar e Sair
-                </button>
-                {batchStep === 'upload' && (
-                  <>
-                    <button className="btn-ghost" onClick={() => { setBatchEntries([]); setBatchReport(null); apiPost('batch-state', null); }}><X size={15}/> Limpar</button>
-                    <button className="btn-primary" 
-                      disabled={batchEntries.length === 0 || !batchSubjectId}
-                      onClick={() => setBatchStep('validate')}>
-                      Próximo Passo <ChevronRight size={16}/>
-                    </button>
-                  </>
-                )}
-              </div>
-            </header>
-
-            {/* STEP 1: UPLOAD & MATCHING */}
-            {batchStep === 'upload' && (
-              <div className="fade-in">
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
-                  <div className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 0 }}>
-                      <BookOpen size={16} color="var(--accent)"/> 1. Selecione a Matéria
-                    </label>
-                    <select className="input" style={{ width: '100%' }} value={batchSubjectId} onChange={e => {
-                      setBatchSubjectId(e.target.value);
-                      setBatchEntries(prev => prev.map(en => ({ ...en, subjectId: e.target.value })));
-                    }}>
-                      <option value="">Selecione a disciplina...</option>
-                      {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
-                    </select>
-                  </div>
-                  <div className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 0 }}>
-                      <Upload size={16} color="var(--accent)"/> 2. Envie os PDFs
-                    </label>
-                    <label className="drop-zone drop-zone-sm" style={{ 
-                      cursor: 'pointer', 
-                      height: 48, 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center',
-                      fontSize: 13,
-                      borderStyle: 'dashed'
-                    }}>
-                      Clique para selecionar os arquivos
-                      <input type="file" accept=".pdf" multiple style={{ display: 'none' }}
-                        onChange={e => e.target.files && addBatchFiles(e.target.files)}/>
-                    </label>
-                  </div>
-                </div>
-
-                {batchEntries.length > 0 && (
-                  <div className="table-wrap">
-                    <div style={{ display: 'grid', gridTemplateColumns: '28px minmax(0,2fr) minmax(0,1.5fr) 40px', gap: 12, padding: '12px 16px', fontSize: 11, fontWeight: 600, color: 'var(--text2)', textTransform: 'uppercase' }}>
-                      <span>#</span><span>Arquivo</span><span>Aluno Identificado</span><span></span>
-                    </div>
-                    {batchEntries.map((entry, idx) => (
-                      <div key={entry.id} className="batch-item" style={{ gridTemplateColumns: '28px minmax(0,2fr) minmax(0,1.5fr) 40px', padding: '10px 16px', marginBottom: 6 }}>
-                        <span style={{ fontSize: 12, color: 'var(--text2)' }}>{idx+1}</span>
-                        <span style={{ fontSize: 13, fontWeight: 500 }}>{entry.filename}</span>
-                        <select className="input" style={{ fontSize: 12, padding: '5px 10px' }}
-                          value={entry.studentId}
-                          onChange={e => updateBatch(entry.id, { studentId: e.target.value })}>
-                          <option value="">Selecionar aluno...</option>
-                          {dbData.students
-                            .filter(s => !batchSubjectId || (s.subjectIds || []).includes(batchSubjectId))
-                            .sort((a,b) => a.name.localeCompare(b.name))
-                            .map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                        </select>
-                        <button className="btn-icon-danger" onClick={() => setBatchEntries(prev => prev.filter(en => en.id !== entry.id))}><X size={14}/></button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div style={{ marginTop: 24, padding: '20px 0', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-                  <button className="btn-ghost" onClick={() => { setBatchEntries([]); setBatchReport(null); apiPost('batch-state', null); }}><X size={15}/> Limpar Tudo</button>
-                  <button className="btn-primary" 
-                    disabled={batchEntries.length === 0 || !batchSubjectId}
-                    onClick={() => setBatchStep('validate')}>
-                    Próximo Passo <ChevronRight size={16}/>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* STEP 2: VALIDATION */}
-            {batchStep === 'validate' && (() => {
-              const sub = dbData.subjects.find(s => s.id === batchSubjectId);
-              const syllabus = syllabusChunks(sub?.syllabus ?? '');
-              return (
-                <div className="fade-in">
-                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 350px) 1fr', gap: 24, alignItems: 'stretch' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                      <div className="card" style={{ padding: 20, borderLeft: '4px solid var(--accent)', flex: 1 }}>
-                        <h3 style={{ fontSize: 13, color:'var(--text1)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <BookOpen size={16} color="var(--accent)"/> Orientações da Matéria
-                        </h3>
-                        <p style={{ fontSize: 13, fontWeight: 600 }}>{sub?.name}</p>
-                        <p style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 10 }}>{sub?.code}</p>
-                        <div style={{ fontSize: 12, color: 'var(--text2)', background: 'var(--surface2)', padding: 10, borderRadius: 8, maxHeight: 150, overflow: 'auto', border: '1px solid var(--border)' }}>
-                          {syllabus.length > 0 ? syllabus[0].slice(0, 800) + '...' : 'Sem ementa cadastrada.'}
-                        </div>
-                      </div>
-
-                      <div className="card" style={{ padding: 20, borderLeft: '4px solid #10b981', flex: 1 }}>
-                        <h3 style={{ fontSize: 13, color:'var(--text1)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <Sparkles size={16} color="#10b981"/> Orientações da Atividade
-                        </h3>
-                        <label className="field-label">Vincular a uma Atividade Existente</label>
-                        <select className="input" value={batchActivityId} onChange={e => setBatchActivityId(e.target.value)}>
-                          <option value="">-- Avaliação Geral (Sem Critério Específico) --</option>
-                          {dbData.activities.filter(a => a.subjectId === batchSubjectId).map(a => (
-                            <option key={a.id} value={a.id}>{a.title}</option>
-                          ))}
-                        </select>
-                        {batchActivityId && (() => {
-                          const act = dbData.activities.find(a => a.id === batchActivityId);
-                          return (
-                            <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text2)', background: 'var(--surface2)', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}>
-                              <b>Critérios:</b><br/>{act?.description || 'Nenhum critério detalhado.'}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    </div>
-
-                    <div className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column' }}>
-                      <h3 style={{ fontSize: 13, color:'var(--text1)', marginBottom: 16 }}>Resumo do Lote</h3>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, overflow: 'auto', maxHeight: 350 }}>
-                        {batchEntries.map((e, i) => {
-                          const stu = dbData.students.find(s => s.id === e.studentId);
-                          return (
-                            <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--surface2)', borderRadius: 6, fontSize: 12, border: '1px solid var(--border)' }}>
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 10 }}>{i+1}. {e.filename}</span>
-                              <span style={{ fontWeight: 600, color: 'var(--accent)', flexShrink: 0 }}>{stu?.name || 'Não associado'}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <div style={{ marginTop: 20, padding: 16, background: 'var(--accent)10', borderRadius: 8, border: '1px solid var(--accent)30' }}>
-                        <p style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 600, marginBottom: 4 }}>Pronto para processar?</p>
-                        <p style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.4 }}>O sistema realizará uma análise completa e detalhada baseada nos critérios pedagógicos.</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ marginTop: 24, padding: '20px 0', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                    <div>
-                      {!batchActivityId && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#f59e0b', background: '#f59e0b15', padding: '8px 14px', borderRadius: 8, border: '1px solid #f59e0b40' }}>
-                          <AlertCircle size={14}/>
-                          <span><strong>Atividade não selecionada.</strong> As correções irão para o grupo "Geral".</span>
-                        </div>
-                      )}
-                      {batchActivityId && (() => {
-                        const act = dbData.activities.find(a => a.id === batchActivityId);
-                        return (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#10b981', background: '#10b98115', padding: '8px 14px', borderRadius: 8, border: '1px solid #10b98140' }}>
-                            <CheckCircle size={14}/>
-                            <span>Atividade vinculada: <strong>{act?.title}</strong></span>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                    <div style={{ display: 'flex', gap: 12 }}>
-                      <button className="btn-ghost" onClick={() => setBatchStep('upload')}>Voltar</button>
-                      <button className="btn-primary" onClick={runBatch}>
-                        <Sparkles size={16}/> Enviar para Correção
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* STEP 3: RESULTS */}
-            {batchStep === 'results' && (
-              <div className="fade-in">
-                {batchRunning ? (
-                  <div className="empty-state" style={{ height: 400 }}>
-                    <div className="spin" style={{ marginBottom: 20 }}><RefreshCw size={48} color="var(--accent)"/></div>
-                    <h2>Analisando Trabalhos...</h2>
-                    <p>Aguarde enquanto o sistema processa cada documento baseado na ementa e critérios pedagógicos.</p>
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
-                      <div className="stat-card" style={{ flex: 1, borderTop: '4px solid var(--green)' }}>
-                        <h3>Sucesso</h3>
-                        <p>{batchReport?.succeeded || 0} corrigidos</p>
-                      </div>
-                      <div className="stat-card" style={{ flex: 1, borderTop: '4px solid var(--red)' }}>
-                        <h3>Erros</h3>
-                        <p>{batchReport?.failed || 0} falhas</p>
-                      </div>
-                    </div>
-
-                    <div className="table-wrap">
-                      <table className="table">
-                        <thead>
-                          <tr>
-                            <th>Aluno</th>
-                            <th>Status/Nota</th>
-                            <th>Feedback / Erro</th>
-                            <th>Ações</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {batchEntries.map(e => (
-                            <tr key={e.id}>
-                              <td className="td-name">
-                                {dbData.students.find(s => s.id === e.studentId)?.name || 'Aluno'}
-                                <br/><span style={{ fontSize: 10, color: 'var(--text2)' }}>{e.filename}</span>
-                              </td>
-                              <td>
-                                {e.status === 'done' ? (
-                                  <span className="badge badge-green" style={{ fontSize: 14 }}>{e.result?.grade?.toFixed(1)}</span>
-                                ) : (
-                                  <span className="badge badge-red">ERRO</span>
-                                )}
-                              </td>
-                              <td style={{ maxWidth: 400 }}>
-                                <p style={{ fontSize: 12, lineHeight: 1.4 }} className={e.status === 'error' ? 'text-red' : ''}>
-                                  {e.status === 'done' ? e.result?.feedback?.slice(0, 150) + '...' : (
-                                    <span><strong>Falha:</strong> {e.error}</span>
-                                  )}
-                                </p>
-                              </td>
-                              <td style={{ textAlign: 'right' }}>
-                                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                                  {e.status === 'processing' && (
-                                    <div className="spin"><RefreshCw size={14}/></div>
-                                  )}
-                                  {e.status === 'done' && (
-                                    <>
-                                      <button className="btn-icon" onClick={() => setSelected(e.result!)} title="Ver Detalhes">
-                                        <ChevronRight size={14}/>
-                                      </button>
-                                      <button className="btn-icon-danger" onClick={() => del('submission', e.result!.id)} title="Excluir Correção">
-                                        <Trash2 size={14}/>
-                                      </button>
-                                    </>
-                                  )}
-                                  {e.status === 'error' && (
-                                    <>
-                                      <button className="btn-ghost" style={{ padding: '4px 10px', height: 'auto', fontSize: 11, border: '1px solid var(--accent)' }} 
-                                        onClick={() => retryBatchEntry(e.id)} title="Tentar Novamente">
-                                        <RefreshCw size={12}/> Retentar
-                                      </button>
-                                      <button className="btn-ghost" style={{ padding: '4px 10px', height: 'auto', fontSize: 11, border: '1px solid #10b981' }} 
-                                        onClick={() => goToManualForEntry(e)} title="Lançar Manualmente">
-                                        <Edit2 size={12}/> Manual
-                                      </button>
-                                      <button className="btn-icon-danger" onClick={() => setBatchEntries(prev => prev.filter(x => x.id !== e.id))} title="Remover da Lista">
-                                        <Trash2 size={14}/>
-                                      </button>
-                                    </>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    <div style={{ marginTop: 24, padding: '20px 0', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-                      <button className="btn-primary" onClick={async () => { 
-                        setBatchStep('upload'); 
-                        setBatchEntries([]); 
-                        setBatchReport(null); 
-                        await apiPost('batch-state', null);
-                        await fetchDB();
-                      }}>
-                        Nova Correção
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          <BatchView
+            dbData={dbData}
+            batchStep={batchStep}
+            setBatchStep={setBatchStep}
+            batchEntries={batchEntries}
+            setBatchEntries={setBatchEntries}
+            batchSubjectId={batchSubjectId}
+            setBatchSubjectId={setBatchSubjectId}
+            batchActivityId={batchActivityId}
+            setBatchActivityId={setBatchActivityId}
+            batchRunning={batchRunning}
+            batchReport={batchReport}
+            setBatchReport={setBatchReport}
+            onSaveAndExit={saveBatchAndExit}
+            onAddFiles={addBatchFiles}
+            onUpdateEntry={updateBatch}
+            onRunBatch={runBatch}
+            onRetryEntry={retryBatchEntry}
+            onGoToManual={goToManualForEntry}
+            onDeleteSubmission={(id) => del('submission', id)}
+            onViewDetails={setSelected}
+            onReset={async () => {
+              setBatchEntries([]);
+              setBatchReport(null);
+              await apiPost('batch-state', null);
+            }}
+            syllabusChunks={syllabusChunks}
+          />
         )}
 
         {/* ── ASSISTENTE CANVAS ──────────────────────────────────────────────────────── */}
-        {view === 'canvas' && (() => {
-          const subject = dbData.subjects.find(s => s.id === canvSubId);
-          
-          // Improved logic: Show ALL students of the subject, filling missing ones with 0
-          const displayEntries = dbData.students
-            .filter(stu => (stu.subjectIds || []).includes(canvSubId))
-            .map(stu => {
-               const realSub = dbData.submissions.find(s => 
-                 s.studentName === stu.name && 
-                 s.subject === subject?.name && 
-                 (canvActTitle ? getActName(s.feedback || '') === canvActTitle : !getActName(s.feedback || ''))
-               );
+        {view === 'canvas' && (
+          <CanvasAssistantView
+            dbData={dbData}
+            loading={loading}
+            onFetchDB={fetchDB}
+            canvSubId={canvSubId}
+            setCanvSubId={setCanvSubId}
+            canvActTitle={canvActTitle}
+            setCanvActTitle={setCanvActTitle}
+            canvActiveSubId={canvActiveSubId}
+            setCanvActiveSubId={setCanvActiveSubId}
+            displayEntries={dbData.students
+              .filter(stu => (stu.subjectIds || []).includes(canvSubId))
+              .map(stu => {
+                 const realSub = dbData.submissions.find(s => 
+                   s.studentName === stu.name && 
+                   s.subject === dbData.subjects.find(sub => sub.id === canvSubId)?.name && 
+                   (canvActTitle ? getActName(s.feedback || '') === canvActTitle : !getActName(s.feedback || ''))
+                 );
+                 return realSub || {
+                    id: `missing-${stu.id}`,
+                    studentName: stu.name,
+                    subject: dbData.subjects.find(sub => sub.id === canvSubId)?.name || '',
+                    grade: 0.0,
+                    feedback: canvActTitle ? `Atividade: ${canvActTitle}\nNota 0 e duas faltas` : "Nenhuma avaliação geral encontrada",
+                    isMissing: true,
+                    status: 'graded' as const
+                  };
+              })
+              .sort((a,b) => a.studentName.localeCompare(b.studentName))}
+            onSendToAudit={sendToAudit}
+            getActName={getActName}
+          />
+        )}
 
-               if (realSub) return { ...realSub, isMissing: false };
-               
-               return {
-                 id: `missing-${stu.id}`,
-                 studentName: stu.name,
-                 subject: subject?.name || 'Não informada',
-                 grade: 0.0,
-                 feedback: canvActTitle ? "Nota 0 e duas faltas" : "Nenhuma avaliação geral encontrada",
-                 isMissing: true,
-                 status: 'graded' as const
-               };
-            })
-            .sort((a,b) => a.studentName.localeCompare(b.studentName));
-
-          const activeSub = displayEntries.find(s => s.id === canvActiveSubId) || displayEntries[0];
-
-          const copyToClipboard = (text: string, label: string) => {
-            navigator.clipboard.writeText(text);
-          };
-
-          const cleanFeedback = (text: string = '') => {
-            if (!text) return '';
-            let clean = text.replace(/Atividade: .*\n/, '');
-            // Best effort to remove name prefixes like "Nome, ..." or "Nome. ..."
-            if (activeSub?.studentName) {
-              const nameParts = activeSub.studentName.split(' ');
-              const firstName = nameParts[0];
-              const namePattern = new RegExp(`^(${activeSub.studentName}|${firstName})[,.:!]?\\s*`, 'i');
-              clean = clean.replace(namePattern, '');
-            }
-            return clean.charAt(0).toUpperCase() + clean.slice(1);
-          };
-
-          const getSummary = (text: string = '') => {
-            const clean = cleanFeedback(text);
-            const sentences = clean.split(/[.!?]\s/);
-            if (sentences.length <= 2) return clean;
-            return sentences.slice(0, 2).join('. ') + '.';
-          };
-
-          return (
-            <div className="fade-in">
-              <header className="header">
-                <div><h1>Assistente de Lançamento (Canvas)</h1><p className="subtitle">Facilite o "copia e cola" para o SpeedGrader</p></div>
-                <button className="btn-ghost" onClick={fetchDB} disabled={loading}>
-                  <RefreshCw size={16} className={loading ? 'spin' : ''}/> Atualizar Avaliações
-                </button>
-              </header>
-
-              <div className="card" style={{ padding: 20, marginBottom: 20 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                  <div>
-                    <label className="field-label">Selecione a Matéria no Aval.IA</label>
-                    <select className="input" value={canvSubId} onChange={e => { setCanvSubId(e.target.value); setCanvActTitle(''); setCanvActiveSubId(null); }}>
-                      <option value="">Selecione...</option>
-                      {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="field-label">Filtrar por Atividade</label>
-                    <select className="input" value={canvActTitle} onChange={e => { setCanvActTitle(e.target.value); setCanvActiveSubId(null); }} disabled={!canvSubId}>
-                      <option value="">Todas as Avaliações</option>
-                      {dbData.activities.filter(a => a.subjectId === canvSubId).map(a => <option key={a.id} value={a.title}>{a.title}</option>)}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {!canvSubId ? (
-                <div className="empty-state" style={{ height: 300 }}>
-                  <Copy size={48} color="var(--border)" style={{ marginBottom: 16 }}/>
-                  <p>Selecione uma matéria para iniciar o assistente de lançamento.</p>
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 24, height: 'calc(100vh - 350px)', minHeight: 500 }}>
-                  {/* Student List Sidebar */}
-                  <div className="card" style={{ padding: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ padding: '12px 16px', background: 'var(--surface2)', borderBottom: '1px solid var(--border)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text2)' }}>
-                      Alunos ({displayEntries.length})
-                    </div>
-                    {displayEntries.map(s => {
-                      const isActive = (canvActiveSubId === s.id) || (!canvActiveSubId && displayEntries[0]?.id === s.id);
-                      return (
-                        <div 
-                          key={s.id} 
-                          onClick={() => setCanvActiveSubId(s.id)}
-                          style={{ 
-                            padding: '12px 16px', 
-                            cursor: 'pointer', 
-                            borderBottom: '1px solid var(--border)',
-                            background: isActive ? 'var(--accent)10' : 'transparent',
-                            borderLeft: isActive ? '4px solid var(--accent)' : '4px solid transparent',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            opacity: s.isMissing ? 0.6 : 1
-                          }}
-                        >
-                          <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontSize: 13, fontWeight: isActive ? 600 : 400, color: isActive ? 'var(--accent)' : 'var(--text1)' }}>{s.studentName}</span>
-                            {s.isMissing && <span style={{ fontSize: 9, color: 'var(--red)', fontWeight: 600 }}>Ausente</span>}
-                          </div>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: s.isMissing ? 'var(--red)' : ((s.grade || 0) >= 7 ? 'var(--blue)' : 'var(--red)') }}>{s.grade?.toFixed(1)}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* High-Action Clipboard Area */}
-                  <div className="card" style={{ padding: 32, display: 'flex', flexDirection: 'column', gap: 32, background: 'var(--surface2)30' }}>
-                    {!activeSub ? (
-                       <div className="empty-state"><p>Selecione um aluno na lista</p></div>
-                    ) : (
-                      <>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                          <div>
-                            <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 4 }}>{activeSub.studentName}</h2>
-                            <p style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 14 }}>{activeSub.subject} • {getActName(activeSub.feedback || '') || 'Geral'}</p>
-                            {activeSub.isMissing && <div className="badge badge-red" style={{ marginTop: 8 }}>Entrega não identificada</div>}
-                          </div>
-                          <div style={{ textAlign: 'right' }}>
-                            <p style={{ fontSize: 11, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '.1em' }}>Nota para o Canvas</p>
-                            <div style={{ fontSize: 48, fontWeight: 900, color: (activeSub.grade || 0) >= 7 ? 'var(--blue)' : 'var(--red)', lineHeight: 1 }}>{activeSub.grade?.toFixed(1)}</div>
-                          </div>
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32 }}>
-                          {/* Column 1: Grade Action */}
-                          <div className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, border: activeSub.isMissing ? '2px solid var(--red)30' : '2px solid var(--accent)30' }}>
-                             <div style={{ fontSize: 13, color: 'var(--text2)', fontWeight: 600 }}>Campo "Nota de 0"</div>
-                             <button className={activeSub.isMissing ? "btn-danger" : "btn-primary"} style={{ width: '100%', height: 60, fontSize: 18 }} onClick={() => copyToClipboard(activeSub.grade?.toFixed(1) || '0.0', 'Nota')}>
-                               <Copy size={20}/> Copiar Nota: <b>{activeSub.grade?.toFixed(1)}</b>
-                             </button>
-                             <p style={{ fontSize: 10, color: 'var(--text2)' }}>Clique para copiar e cole no Canvas</p>
-                             
-                             {!activeSub.isMissing && (
-                               <button className="btn-ghost" style={{ marginTop: 12, fontSize: 11, height: 'auto', padding: '6px 12px' }} onClick={() => sendToAudit(activeSub.id)}>
-                                 <AlertCircle size={14}/> Solicitar Auditoria
-                               </button>
-                             )}
-                          </div>
-
-                          {/* Column 2: Feedback Summary Action */}
-                          <div className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 12, border: activeSub.isMissing ? '2px solid var(--red)30' : '2px solid var(--accent)30' }}>
-                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                               <div style={{ fontSize: 13, color: 'var(--text2)', fontWeight: 600 }}>Campo "Comentários" (Resumo)</div>
-                               <button className="btn-ghost" style={{ padding: '4px 10px', height: 'auto', fontSize: 11 }} onClick={() => copyToClipboard(getSummary(activeSub.feedback), 'Resumo')}>
-                                 <Copy size={12}/> Copiar Resumo
-                               </button>
-                             </div>
-                             <div style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: 12, fontSize: 12, color: activeSub.isMissing ? 'var(--red)' : 'var(--text1)', minHeight: 80, lineHeight: 1.5, fontWeight: activeSub.isMissing ? 600 : 400 }}>
-                               {getSummary(activeSub.feedback)}
-                             </div>
-                          </div>
-                        </div>
-
-                        {/* Full Feedback Column */}
-                        <div className="card" style={{ padding: 20 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                            <div style={{ fontSize: 13, color: 'var(--text2)', fontWeight: 600 }}>Feedback Completo (Referência)</div>
-                            <button className="btn-ghost" style={{ padding: '4px 10px', height: 'auto', fontSize: 11 }} onClick={() => copyToClipboard(activeSub.feedback || '', 'Completo')}>
-                               <Copy size={12}/> Copiar Tudo
-                            </button>
-                          </div>
-                          <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: 16, fontSize: 13, color: 'var(--text2)', maxHeight: 200, overflow: 'auto', border: '1px solid var(--border)', whiteSpace: 'pre-wrap' }}>
-                            {cleanFeedback(activeSub.feedback)}
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
-        {/* ── LANÇAMENTO MANUAL ──────────────────────────────────────────────────────── */}
-        {view === 'manual' && (() => {
-          const handleManualSave = async () => {
-            if (!manuStu || !manuSub) return alert('Selecione aluno e matéria');
-            setManuSaving(true);
-            try {
-              const stu = dbData.students.find(s => s.id === manuStu);
-              const sub = dbData.subjects.find(s => s.id === manuSub);
-              const act = dbData.activities.find(a => a.id === manuAct);
-              if (!stu || !sub) throw new Error('Dados inválidos');
-
-              const activityPrefix = act ? `Atividade: ${act.title}\n` : '';
-              await apiPost('submission', {
-                studentName: stu.name,
-                subject: sub.name,
-                status: "graded",
-                grade: parseFloat(manuGrade),
-                feedback: activityPrefix + manuFeed,
-                source: "pdf", 
-                submittedAt: new Date().toISOString().split("T")[0],
-              });
-              alert('Nota lançada com sucesso!');
-              setManuGrade('0.0'); setManuFeed('');
-              fetchDB();
-              setView('dashboard');
-            } catch (e:any) { alert(e.message); }
-            setManuSaving(false);
-          };
-
-          return (
-            <div className="fade-in">
-              <header className="header">
-                <div><h1>Lançamento Manual</h1><p className="subtitle">Ajuste de notas e correções avulsas</p></div>
-              </header>
-
-              <div className="card" style={{ padding: 40, maxWidth: 900, margin: '20px auto' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
-                  <div>
-                    <label className="field-label">Aluno</label>
-                    <select className="input" value={manuStu} onChange={e => setManuStu(e.target.value)} style={{height: 48}}>
-                      <option value="">Selecione o Aluno...</option>
-                      {dbData.students.sort((a,b) => a.name.localeCompare(b.name)).map(s => (
-                        <option key={s.id} value={s.id}>{s.name} {s.ra ? `(${s.ra})` : ''}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="field-label">Matéria</label>
-                    <select className="input" value={manuSub} onChange={e => { setManuSub(e.target.value); setManuAct(''); }} style={{height: 48}}>
-                      <option value="">Selecione a Matéria...</option>
-                      {dbData.subjects.sort((a,b) => a.name.localeCompare(b.name)).map(s => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div style={{ marginBottom: 24 }}>
-                  <label className="field-label">Atividade Correspondente (Opcional)</label>
-                  <select className="input" value={manuAct} onChange={e => setManuAct(e.target.value)} disabled={!manuSub} style={{height: 48}}>
-                    <option value="">-- Avaliação Geral / Sem Vínculo Específico --</option>
-                    {dbData.activities.filter(a => a.subjectId === manuSub).map(a => (
-                      <option key={a.id} value={a.id}>{a.title}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: 32, marginBottom: 32 }}>
-                  <div>
-                    <label className="field-label">Nota Final</label>
-                    <input type="number" step="0.1" min="0" max="10" className="input" value={manuGrade} onChange={e => setManuGrade(e.target.value)} style={{ fontSize: 24, fontWeight: 800, textAlign: 'center', height: 60, color: parseFloat(manuGrade) >= 7 ? 'var(--blue)' : 'var(--red)' }} />
-                  </div>
-                  <div>
-                    <label className="field-label">Feedback ou Observações do Professor</label>
-                    <textarea className="input" rows={6} placeholder="Utilize este espaço para registrar considerações pedagógicas, justificativas de ajuste ou observações sobre a entrega..." value={manuFeed} onChange={e => setManuFeed(e.target.value)} style={{padding: 16}} />
-                  </div>
-                </div>
-
-                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 32, display: 'flex', justifyContent: 'flex-end', gap: 16 }}>
-                  <button className="btn-ghost" style={{padding: '0 24px'}} onClick={() => setView('dashboard')}>Cancelar</button>
-                  <button className="btn-primary" style={{ padding: '0 40px', height: 48 }} disabled={manuSaving} onClick={handleManualSave}>
-                    {manuSaving ? <RefreshCw className="spin" size={18}/> : <Check size={18}/>}
-                    Confirmar Lançamento
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
+        {view === 'manual' && (
+          <ManualGradingView
+            dbData={dbData}
+            manuStu={manuStu}
+            setManuStu={setManuStu}
+            manuSub={manuSub}
+            setManuSub={setManuSub}
+            manuAct={manuAct}
+            setManuAct={setManuAct}
+            manuGrade={manuGrade}
+            setManuGrade={setManuGrade}
+            manuFeed={manuFeed}
+            setManuFeed={setManuFeed}
+            manuSaving={manuSaving}
+            onSave={handleManualSave}
+            onCancel={() => setView('dashboard')}
+          />
+        )}
 
         {/* â•â• LANÇAMENTO (COPIA E COLA) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
-        {/* ── COPIA DE ATIVIDADES ─────────────────────────────────────────────────── */}
-        {view === 'copy' && <>
-          <header className="header">
-            <div><h1>Copia de Atividades</h1><p className="subtitle">Clonar rotinas e avaliações entre matérias</p></div>
-            <div className="header-actions">
-               <button className="btn-ghost" onClick={() => {
-                 setCopySubjectId(''); setCopyDestSubjectId(''); setCopySelectedActs([]); setNewSubjectName('');
-               }}><RefreshCw size={14}/> Limpar Tudo</button>
-            </div>
-          </header>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(350px, 1fr) minmax(380px, 1.2fr)', gap: 24 }} className="fade-in">
-            <div className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--accent)' }}>
-                <Clock size={16} /> 1. Selecionar Origem
-              </h3>
-              <div>
-                <label className="field-label">Matéria de Origem</label>
-                <select className="input" value={copySubjectId} onChange={e => {
-                  setCopySubjectId(e.target.value);
-                  setCopySelectedActs([]);
-                }}>
-                  <option value="">Selecione a matéria...</option>
-                  {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
-                </select>
-              </div>
-
-              {copySubjectId && (
-                <div className="fade-in" style={{ marginTop: 10 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <label className="field-label" style={{ margin: 0 }}>Atividades disponíveis</label>
-                    <button className="btn-ghost" style={{ padding: '2px 8px', fontSize: 10 }} onClick={() => {
-                      const allIds = dbData.activities.filter(a => a.subjectId === copySubjectId).map(a => a.id);
-                      setCopySelectedActs(copySelectedActs.length === allIds.length ? [] : allIds);
-                    }}>{copySelectedActs.length === dbData.activities.filter(a => a.subjectId === copySubjectId).length ? 'Limpar Seleção' : 'Selecionar Todas'}</button>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 400, overflowY: 'auto', padding: '12px 16px', background: 'var(--surface2)', borderRadius: 10, border: '1px solid var(--border)' }}>
-                    {dbData.activities.filter(a => a.subjectId === copySubjectId).map(act => (
-                      <label key={act.id} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '8px 10px', borderRadius: 8, transition: 'all .2s' }}>
-                        <input type="checkbox" checked={copySelectedActs.includes(act.id)} onChange={() => {
-                          setCopySelectedActs(prev => prev.includes(act.id) ? prev.filter(i => i !== act.id) : [...prev, act.id]);
-                        }} />
-                        <div style={{ flex: 1 }}>
-                          <p style={{ fontSize: 13, fontWeight: 600 }}>{act.title}</p>
-                          <p style={{ fontSize: 10, color: 'var(--text2)' }}>Peso: {act.weight}</p>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-              <div className="card" style={{ padding: 24, border: '1px solid var(--border)' }}>
-                <h3 style={{ fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--accent)' }}>
-                  <Plus size={16} /> 2. Configurar Destino
-                </h3>
-                <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <div>
-                    <label className="field-label">Matéria de Destino</label>
-                    <select className="input" value={copyDestSubjectId} onChange={e => setCopyDestSubjectId(e.target.value)}>
-                      <option value="">-- CRIAR NOVA MATÉRIA --</option>
-                      {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
-                    </select>
-                  </div>
-
-                  {!copyDestSubjectId && (
-                    <div className="fade-in">
-                      <label className="field-label">Nome da Nova Matéria</label>
-                      <input className="input" placeholder="Ex: Cálculo III (Copy)" value={newSubjectName} onChange={e => setNewSubjectName(e.target.value)} />
-                    </div>
-                  )}
-
-                  <div style={{ padding: '20px', background: 'var(--accent)', color: '#fff', borderRadius: 12, marginTop: 10, opacity: (copySubjectId && copySelectedActs.length > 0 && (copyDestSubjectId || newSubjectName)) ? 1 : 0.4 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <Layers size={22} />
-                      <div>
-                        <p style={{ fontSize: 11, opacity: 0.8 }}>Pronto para copiar</p>
-                        <p style={{ fontSize: 14, fontWeight: 700 }}>{copySelectedActs.length} {copySelectedActs.length === 1 ? 'atividade' : 'atividades'}</p>
-                      </div>
-                    </div>
-                    <button 
-                      className="btn-primary" 
-                      style={{ width: '100%', marginTop: 16, background: '#fff', color: 'var(--accent)', fontWeight: 800, height: 42 }}
-                      onClick={handleCopyActivities}
-                      disabled={copyProcessing || !copySubjectId || copySelectedActs.length === 0 || (!copyDestSubjectId && !newSubjectName)}
-                    >
-                      {copyProcessing ? <Sparkles className="spin" size={16} /> : <Check size={16} />} 
-                      {copyDestSubjectId ? 'Clonar nas Atividades Atuais' : 'Criar Nova com Atividades'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {copyDestSubjectId && (
-                <div className="card fade-in" style={{ padding: 24, background: 'var(--surface2)30' }}>
-                  <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>Conteúdo Atual no Destino</h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {dbData.activities.filter(a => a.subjectId === copyDestSubjectId).map(act => (
-                      <div key={act.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)' }}>
-                        <span style={{ fontSize: 12 }}>{act.title}</span>
-                        <button className="btn-icon-danger" style={{ width: 26, height: 26 }} onClick={() => del('activity', act.id)}>
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </>}
+        {view === 'copy' && (
+          <CopyActivitiesView
+            dbData={dbData}
+            copySubjectId={copySubjectId}
+            setCopySubjectId={setCopySubjectId}
+            copyDestSubjectId={copyDestSubjectId}
+            setCopyDestSubjectId={setCopyDestSubjectId}
+            copySelectedActs={copySelectedActs}
+            setCopySelectedActs={setCopySelectedActs}
+            newSubjectName={newSubjectName}
+            setNewSubjectName={setNewSubjectName}
+            copyProcessing={copyProcessing}
+            onCopy={handleCopyActivities}
+            onDelete={del}
+            onReset={() => {
+              setCopySubjectId(''); setCopyDestSubjectId(''); setCopySelectedActs([]); setNewSubjectName('');
+            }}
+          />
+        )}
 
         {/* â•â• RELATÓRIOS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         {view === 'reports' && (
-          <div className="fade-in">
-            <header className="header" style={{ marginBottom: 24 }}>
-              <div>
-                <h1>Relatórios Acadêmicos</h1>
-                <p className="subtitle">Gere pautas de notas e faltas em PDF</p>
-              </div>
-              <button className="btn-icon" onClick={fetchDB} title="Recarregar Dados">
-                <RefreshCw size={18} className={loading ? 'spin' : ''}/>
-              </button>
-            </header>
-
-            <div className="card" style={{ padding: 24, marginBottom: 24 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: 16 }}>
-                <div>
-                  <label className="field-label">Tipo de Relatório</label>
-                  <div className="toggle-group" style={{ marginTop: 0 }}>
-                    <button className={reportType === 'subject' ? 'active' : ''} onClick={() => setReportType('subject')}>Por Matéria</button>
-                    <button className={reportType === 'activity' ? 'active' : ''} onClick={() => setReportType('activity')}>Por Atividade</button>
-                  </div>
-                </div>
-                <div>
-                  <label className="field-label">Matéria</label>
-                  <select className="input" value={reportSubjectId} onChange={e => {
-                    setReportSubjectId(e.target.value);
-                    setReportActivityId('');
-                  }}>
-                    <option value="">Selecione...</option>
-                    {dbData.subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
-                  </select>
-                </div>
-                {reportType === 'activity' && (
-                  <div>
-                    <label className="field-label">Atividade</label>
-                    <select className="input" value={reportActivityId} onChange={e => setReportActivityId(e.target.value)} disabled={!reportSubjectId}>
-                      <option value="">Selecione...</option>
-                      {dbData.activities.filter(a => a.subjectId === reportSubjectId).map(a => (
-                        <option key={a.id} value={a.id}>{a.title}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {reportPreviewData && (
-              <div className="fade-in">
-                <div className="card" style={{ padding: 24, marginBottom: 24 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                    <div>
-                      <h3 style={{ fontSize: 16, fontWeight: 700 }}>Prévisualização do Relatório</h3>
-                      <p style={{ fontSize: 12, color: 'var(--text2)' }}>
-                        {reportPreviewData.title} • {reportPreviewData.body.length} alunos identificados
-                      </p>
-                    </div>
-                    <div style={{ display: 'flex', gap: 12 }}>
-                      <button className="btn-ghost" onClick={() => { setView('batch'); setBatchSubjectId(reportSubjectId); }}>
-                        <Layers size={14}/> Ir para Correção
-                      </button>
-                      <button className="btn-primary" style={{ padding: '10px 24px' }} onClick={async () => {
-                        const { jsPDF } = await import('jspdf');
-                        const autoTable = (await import('jspdf-autotable')).default;
-                        const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
-                        
-                        doc.setFontSize(18);
-                        doc.text(dbData.configs.institution || 'Aura AI - Relatório', 14, 20);
-                        doc.setFontSize(11);
-                        doc.setTextColor(100);
-                        doc.text(`Professor: ${dbData.configs.professor || 'Não informado'}`, 14, 28);
-                        doc.text(`Matéria: ${reportPreviewData.title}`, 14, 34);
-                        doc.text(`Data: ${new Date().toLocaleDateString()}`, doc.internal.pageSize.width - 60, 20);
-
-                        autoTable(doc, {
-                          head: [reportPreviewData.head],
-                          body: reportPreviewData.body,
-                          startY: 45,
-                          theme: 'grid',
-                          styles: { fontSize: reportPreviewData.isMatrix ? 7 : 9, cellPadding: 2 },
-                          headStyles: { fillColor: [99, 102, 241], textColor: 255 },
-                          columnStyles: !reportPreviewData.isMatrix ? { 3: { cellWidth: 100 } } : undefined
-                        });
-                        doc.save(`Relatorio_${reportPreviewData.title.replace(/\s+/g, '_')}.pdf`);
-                      }}>
-                        <BarChart2 size={16}/> Gerar PDF Final
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Summary Bar */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
-                    <div className="card" style={{ padding: '14px 18px', background: 'var(--surface2)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <span style={{ fontSize: 9, textTransform: 'uppercase', color: 'var(--text2)', fontWeight: 600, letterSpacing: '0.05em' }}>Atividades Corrigidas</span>
-                      <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--accent2)' }}>{reportPreviewData.stats.totalGraded}</span>
-                    </div>
-                    <div className="card" style={{ padding: '14px 18px', background: 'var(--surface2)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <span style={{ fontSize: 9, textTransform: 'uppercase', color: 'var(--text2)', fontWeight: 600, letterSpacing: '0.05em' }}>Média Geral da Turma</span>
-                      <span style={{ fontSize: 20, fontWeight: 700, color: parseFloat(reportPreviewData.stats.classAvg) >= 7 ? 'var(--blue)' : 'var(--red)' }}>{reportPreviewData.stats.classAvg}</span>
-                    </div>
-                    <div className="card" style={{ padding: '14px 18px', background: 'var(--surface2)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <span style={{ fontSize: 9, textTransform: 'uppercase', color: 'var(--text2)', fontWeight: 600, letterSpacing: '0.05em' }}>Taxa de Entrega</span>
-                      <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--green)' }}>{reportPreviewData.stats.participation}%</span>
-                    </div>
-                    <div className="card" style={{ padding: '14px 18px', background: 'var(--surface2)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <span style={{ fontSize: 9, textTransform: 'uppercase', color: 'var(--text2)', fontWeight: 600, letterSpacing: '0.05em' }}>Alunos Ativos</span>
-                      <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)' }}>
-                        {dbData.students.filter(s => (s.subjectIds || []).includes(reportSubjectId)).length}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <div className="table-wrap" style={{ maxHeight: 500, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 12 }}>
-                    <table className="table" style={{ fontSize: 11, borderCollapse: 'separate', borderSpacing: 0 }}>
-                      <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--surface2)' }}>
-                        <tr>
-                          {reportPreviewData.head.map((h, i) => (
-                            <th key={i} style={{ 
-                              whiteSpace: 'nowrap', 
-                              background: 'var(--surface2)', 
-                              borderBottom: '2px solid var(--border)',
-                              padding: '12px 16px',
-                              textAlign: 'left'
-                            }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {reportPreviewData.body.map((row, i) => (
-                          <tr key={i}>
-                            {row.map((cell, j) => {
-                              const isMatrixGrade = reportPreviewData.isMatrix && (j > 0 && j < (reportPreviewData.head.length - 2) && j % 2 !== 0);
-                              const isMatrixAvg = reportPreviewData.isMatrix && j === (reportPreviewData.head.length - 2);
-                              const isActivityGrade = !reportPreviewData.isMatrix && j === 1;
-                              const isAnyGradeCol = isMatrixGrade || isMatrixAvg || isActivityGrade;
-                              
-                              let customColor = (j === 0 ? 'var(--text1)' : 'var(--text2)');
-                              if (isAnyGradeCol) {
-                                const val = parseFloat(cell);
-                                customColor = val >= 7 ? 'var(--blue)' : 'var(--red)';
-                              }
-
-                              return (
-                                <td key={j} style={{ 
-                                  padding: '10px 16px',
-                                  borderBottom: '1px solid var(--border)',
-                                  fontWeight: (j === 0 || isAnyGradeCol) ? 600 : 400,
-                                  color: customColor,
-                                }}>
-                                  {j === 0 ? (
-                                    <span className="td-name-link" onClick={() => {
-                                      const stu = dbData.students.find(s => s.name === cell);
-                                      if (stu) {
-                                        setSelectedStudentId(stu.id);
-                                        setView('student-profile');
-                                      }
-                                    }}>
-                                      {cell}
-                                    </span>
-                                  ) : j === 3 && !reportPreviewData.isMatrix ? (
-                                    <div style={{ maxWidth: 400, maxHeight: 40, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                                      {cell}
-                                    </div>
-                                  ) : (
-                                    cell
-                                  )}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <ReportsView
+            dbData={dbData}
+            loading={loading}
+            onFetchDB={fetchDB}
+            reportType={reportType}
+            setReportType={setReportType}
+            reportSubjectId={reportSubjectId}
+            setReportSubjectId={setReportSubjectId}
+            reportActivityId={reportActivityId}
+            setReportActivityId={setReportActivityId}
+            reportPreviewData={reportPreviewData}
+            onGoToBatch={(subId) => { setView('batch'); setBatchSubjectId(subId); }}
+            onGeneratePDF={async (data) => {
+               const { jsPDF } = await import('jspdf');
+               const autoTable = (await import('jspdf-autotable')).default;
+               const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+               doc.setFontSize(18);
+               doc.text(dbData.configs.institution_name || 'Aval.IA - Relatório', 14, 20);
+               doc.setFontSize(11);
+               doc.setTextColor(100);
+               doc.text(`Professor: ${dbData.configs.institution_name || 'Não informado'}`, 14, 28);
+               doc.text(`Matéria: ${data.title}`, 14, 34);
+               doc.text(`Data: ${new Date().toLocaleDateString()}`, doc.internal.pageSize.width - 60, 20);
+               autoTable(doc, {
+                 head: [data.head],
+                 body: data.body,
+                 startY: 45,
+                 theme: 'grid',
+                 styles: { fontSize: data.isMatrix ? 7 : 9, cellPadding: 2 },
+                 headStyles: { fillColor: [99, 102, 241], textColor: 255 },
+                 columnStyles: !data.isMatrix ? { 3: { cellWidth: 100 } } : undefined
+               });
+               doc.save(`Relatorio_${data.title.replace(/\s+/g, '_')}.pdf`);
+            }}
+            onOpenStudentProfile={(id) => { setSelectedStudentId(id); setView('student-profile'); }}
+          />
         )}
 
-        {/* ── AUDITORIA PEDAGÓGICA ────────────────────────────────────────────────── */}
-        {view === 'audit' && (() => {
-          const auditList = dbData.submissions.filter(s => s.status === 'audit_pending').sort((a,b) => b.submittedAt.localeCompare(a.submittedAt));
-          const activeAudit = auditList.find(s => s.id === auditSubId) || auditList[0];
-
-          const saveAudit = async (finish: boolean) => {
-            if (!activeAudit) return;
-            try {
-              await apiPost('submission-update', { 
-                id: activeAudit.id, 
-                auditNotes: auditNote,
-                status: finish ? 'audited' : 'audit_pending'
-              });
-              alert(finish ? 'Auditoria finalizada! O caso agora serve como referência pedagógica.' : 'Observação salva com sucesso.');
-              fetchDB();
-              if (finish) setAuditSubId(null);
-            } catch (e: any) { alert(e.message); }
-          };
-
-          return (
-            <div className="fade-in">
-              <header className="header">
-                 <div><h1>Auditoria Pedagógica</h1><p className="subtitle">Análise detalhada e calibração da IA</p></div>
-                 <div className="header-actions">
-                   <button className="btn-ghost" onClick={() => generateAuditReport()}>
-                     <FileText size={16}/> Gerar Histórico de Auditoria
-                   </button>
-                 </div>
-              </header>
-
-              {auditList.length === 0 ? (
-                <div className="empty-state" style={{ height: 400 }}>
-                  <CheckCircle size={48} color="var(--blue)"/>
-                  <h3 style={{marginTop:16}}>Fila de Auditoria Vazia</h3>
-                  <p>Os casos que você marcar para revisão aparecerão aqui.</p>
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 350px) 1fr', gap: 24, height: 'calc(100vh - 250px)' }}>
-                  {/* List */}
-                  <div className="card" style={{ padding: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ padding: '12px 16px', background: 'var(--surface2)', fontSize: 11, fontWeight: 700, color: 'var(--text2)', borderBottom: '1px solid var(--border)', textTransform:'uppercase' }}>
-                      Pilha de Trabalho ({auditList.length})
-                    </div>
-                    {auditList.map(s => {
-                       const isActive = activeAudit?.id === s.id;
-                       return (
-                        <div key={s.id} onClick={() => { setAuditSubId(s.id); setAuditNote(s.auditNotes || ''); }}
-                          style={{ padding: 16, cursor: 'pointer', borderBottom: '1px solid var(--border)', background: isActive ? 'var(--accent)10' : 'transparent', borderLeft: isActive ? '4px solid var(--accent)' : '4px solid transparent' }}>
-                          <div style={{ fontWeight: 600, fontSize: 13, color: isActive ? 'var(--accent)' : 'var(--text1)' }}>{s.studentName}</div>
-                          <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 4 }}>{s.subject}</div>
-                          <div style={{ marginTop: 8, fontSize: 10, display: 'flex', gap: 8 }}>
-                             <span className="badge">Nota IA: {s.grade}</span>
-                             <span className="badge" style={{ background: '#f59e0b20', color: '#f59e0b' }}>Aguardando</span>
-                          </div>
-                        </div>
-                       );
-                    })}
-                  </div>
-
-                  {/* Editor Area */}
-                  <div className="card" style={{ padding: 0, display: 'flex', flexDirection: 'column', background: 'var(--surface2)30', overflow: 'hidden' }}>
-                    {!activeAudit ? <div className="empty-state"><p>Selecione um caso para iniciar</p></div> : (
-                      <>
-                        <div style={{ padding: 32, borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                             <div>
-                               <h2 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text)' }}>Análise de {activeAudit.studentName}</h2>
-                               <p style={{ color: 'var(--accent)', fontSize: 13, fontWeight: 600 }}>{activeAudit.subject} • {getActName(activeAudit.feedback || '') || 'Geral'}</p>
-                               <p style={{ color: 'var(--text2)', fontSize: 11, marginTop: 4 }}>Caso enviado em {activeAudit.submittedAt}</p>
-                             </div>
-                             <div style={{ textAlign: 'right' }}>
-                               <p style={{fontSize:10, color:'var(--text2)', textTransform:'uppercase'}}>Nota IA</p>
-                               <div style={{ fontSize: 42, fontWeight: 900, color: 'var(--accent)', lineHeight:1 }}>{activeAudit.grade}</div>
-                             </div>
-                          </div>
-                        </div>
-
-                        <div style={{ padding: 32, overflow: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 32 }}>
-                          <div>
-                             <h4 style={{ fontSize: 12, textTransform: 'uppercase', color: 'var(--text2)', marginBottom: 12, fontWeight: 700 }}>Texto do Aluno / Feedback IA</h4>
-                             <div style={{ fontSize: 14, lineHeight: 1.6, padding: 20, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, whiteSpace: 'pre-wrap' }}>
-                               {activeAudit.feedback}
-                             </div>
-                          </div>
-
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                             <h4 style={{ fontSize: 12, textTransform: 'uppercase', color: 'var(--accent)', fontWeight: 700 }}>Parecer de Auditoria (Professor)</h4>
-                             <p style={{ fontSize: 11, color: 'var(--text2)' }}>Indique pontos de melhoria na correção. Suas notas serão usadas para calibrar futuras avaliações deste estilo.</p>
-                             <textarea 
-                               className="textarea" 
-                               style={{ minHeight: 180, fontSize: 14, borderRadius: 12, padding: 20 }} 
-                               placeholder="Ex: A IA foi excessivamente técnica. Sugiro um feedback mais encorajador e focado no ponto X..."
-                               value={auditNote} 
-                               onChange={e => setAuditNote(e.target.value)} 
-                             />
-                          </div>
-                        </div>
-
-                        <div style={{ padding: 24, background: 'var(--surface)', borderTop: '1px solid var(--border)', display: 'flex', gap: 16, alignItems: 'center' }}>
-                           <button className="btn-primary" style={{ flex: 1, height: 56, fontSize: 15 }} onClick={() => saveAudit(true)}>
-                             <Check size={20}/> Aprovar e Finalizar Auditoria
-                           </button>
-                           <button className="btn-ghost" style={{ height: 56, padding: '0 24px' }} onClick={() => saveAudit(false)}>
-                             <RefreshCw size={20}/> Salvar Apenas Rascunho
-                           </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })()}
+        {view === 'audit' && (
+          <AuditView
+            dbData={dbData}
+            auditSubId={auditSubId}
+            setAuditSubId={setAuditSubId}
+            auditNote={auditNote}
+            setAuditNote={setAuditNote}
+            onSaveAudit={async (finish) => {
+              const activeAudit = dbData.submissions.filter(s => s.status === 'audit_pending').find(s => s.id === auditSubId);
+              if (!activeAudit) return;
+              try {
+                await apiPost('submission-update', { 
+                  id: activeAudit.id, 
+                  auditNotes: auditNote,
+                  status: finish ? 'audited' : 'audit_pending'
+                });
+                alert(finish ? 'Auditoria finalizada! O caso agora serve como referência pedagógica.' : 'Observação salva com sucesso.');
+                fetchDB();
+                if (finish) setAuditSubId(null);
+              } catch (e: any) { alert(e.message); }
+            }}
+            onGenerateReport={generateAuditReport}
+            getActName={getActName}
+          />
+        )}
 
         {/* â• â•  STUDENT PROFILE â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â•  */}
         {view === 'student-profile' && selectedStudentId && (() => {
           const stu = dbData.students.find(s => s.id === selectedStudentId);
           if (!stu) return null;
-          const stuSubmissions = dbData.submissions.filter(sub => sub.studentName === stu.name && sub.status === 'graded');
-          const avg = stuSubmissions.length > 0 
-            ? (stuSubmissions.reduce((acc, curr) => acc + (curr.grade || 0), 0) / stuSubmissions.length).toFixed(1)
-            : '0.0';
-
           return (
-            <div className="fade-in">
-              <header className="header">
-                <div>
-                  <button className="btn-ghost" onClick={() => setView('reports')} style={{ marginBottom: 12 }}>
-                    <ArrowLeft size={14}/> Voltar para Relatórios
-                  </button>
-                  <h1>Jornada de {stu.name}</h1>
-                  <p className="subtitle">Prontuário Acadêmico Detalhado</p>
-                </div>
-              </header>
-
-              <div className="student-profile-header">
-                <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
-                  <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, fontWeight: 700, color: '#fff' }}>
-                    <div style={{ margin: 'auto' }}>{stu.name.charAt(0)}</div>
-                  </div>
-                  <div>
-                    <h2 style={{ fontSize: 24, marginBottom: 4 }}>{stu.name}</h2>
-                    <div style={{ display: 'flex', gap: 12 }}>
-                       <span className="badge badge-gray">RA: {stu.ra || 'N/A'}</span>
-                       <span className="badge badge-blue">{stuSubmissions.length} Atividades Realizadas</span>
-                    </div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: 16 }}>
-                  <div className="student-stat-card">
-                    <span style={{ fontSize: 10, textTransform: 'uppercase', color: 'var(--text2)' }}>Média Geral</span>
-                    <span style={{ fontSize: 28, fontWeight: 700, color: parseFloat(avg) >= 7 ? 'var(--blue)' : 'var(--red)' }}>{avg}</span>
-                  </div>
-                  <div className="student-stat-card">
-                    <span style={{ fontSize: 10, textTransform: 'uppercase', color: 'var(--text2)' }}>Total Faltas</span>
-                    <span style={{ fontSize: 28, fontWeight: 700, color: 'var(--yellow)' }}>
-                      {(dbData.activities.filter(a => (stu.subjectIds || []).includes(a.subjectId)).length * 2) - (stuSubmissions.length * 2)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>Linha do Tempo de Atividades</h3>
-              <div className="activity-feed">
-                {stuSubmissions.length === 0 && (
-                  <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text2)' }}>
-                    Nenhuma atividade avaliada encontrada para este aluno.
-                  </div>
-                )}
-                {stuSubmissions.sort((a,b) => (b.id > a.id ? 1 : -1)).map(sub => {
-                  const subDate = sub.submittedAt ? new Date(sub.submittedAt.includes('T') ? sub.submittedAt : parseInt(sub.submittedAt)) : (sub.id && !isNaN(parseInt(sub.id.split('-').pop() || '')) ? new Date(parseInt(sub.id.split('-').pop() || '0')) : new Date());
-                  return (
-                    <div key={sub.id} className="activity-card">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                        <div>
-                          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent2)', textTransform: 'uppercase' }}>{sub.subject}</span>
-                          <h4 style={{ fontSize: 16, fontWeight: 600, marginTop: 4 }}>{getActName(sub.feedback || '') || 'Atividade'}</h4>
-                          <p style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
-                            Avaliado em {subDate.toLocaleDateString()}
-                          </p>
-                        </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: 20, fontWeight: 700, color: (sub.grade || 0) >= 7 ? 'var(--blue)' : 'var(--red)' }}>
-                            {sub.grade?.toFixed(1)}
-                          </div>
-                          <span style={{ fontSize: 10, color: 'var(--text2)' }}>Nota</span>
-                        </div>
-                      </div>
-                      <div className="feedback-box">
-                        <div className="feedback-title"><CheckCircle size={12}/> Comentário do Professor</div>
-                        <p className="feedback-text">{sub.feedback}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <StudentProfileView
+              student={stu}
+              dbData={dbData}
+              onBack={() => setView('reports')}
+              onViewSubmission={setSelected}
+            />
           );
         })()}
 
         {/* â•â• IMPLEMENTAÇÃ•ES â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•= */}
-        {view === 'implementacoes' && <>
-          <header className="header">
-            <div><h1>Implementações</h1><p className="subtitle">Gestão de ideias e categorias</p></div>
-            <button className="btn-primary" onClick={() => openImplModal()}><Plus size={16}/> Nova Ideia</button>
-          </header>
+        {view === 'implementacoes' && (
+          <ImplementacoesView 
+            dbData={dbData}
+            onOpenModal={openImplModal}
+            onDelete={(id) => del('implementacao', id)}
+            implStatus={IMPL_STATUS}
+          />
+        )}
 
-          <div className="kanban fade-in">
-            {(['backlog','validating','approved','done'] as const).map(status => {
-              const cfg = IMPL_STATUS[status];
-              const cards = dbData.implementacoes.filter(i => i.status === status);
-              return (
-                <div key={status} className="kanban-col">
-                  <div className="kanban-col-header">
-                    <span style={{width:8,height:8,borderRadius:'50%',background:cfg.color,display:'inline-block'}}/>
-                    {cfg.label}
-                    <span style={{marginLeft:'auto',background:'var(--surface2)',borderRadius:20,padding:'1px 7px',fontSize:10}}>{cards.length}</span>
-                  </div>
-                  <div className="kanban-col-body">
-                    {cards.map(imp => (
-                      <div key={imp.id} className="kanban-card">
-                        {imp.imageUrl && <img src={imp.imageUrl} style={{width:'100%',borderRadius:6,marginBottom:8,height:80,objectFit:'cover'}} alt=""/>}
-                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:4}}>
-                          <div>
-                            {imp.category && <span style={{fontSize:9,textTransform:'uppercase',letterSpacing:'.05em',color:'var(--text2)',display:'block',marginBottom:2}}>{imp.category}</span>}
-                            <p className="kanban-card-title">{imp.title}</p>
-                          </div>
-                          <div style={{display:'flex',gap:4}}>
-                            <button className="btn-icon" onClick={() => openImplModal(imp)}><Edit2 size={12}/></button>
-                            <button className="btn-icon-danger" onClick={e => del('implementacao', imp.id)}><Trash2 size={12}/></button>
-                          </div>
-                        </div>
-                        {imp.description && <p className="kanban-card-desc">{imp.description}</p>}
-                        <div className="kanban-card-footer">
-                          <span className={`badge ${PRIORITY_CONFIG[imp.priority]?.cls}`}>{PRIORITY_CONFIG[imp.priority]?.label}</span>
-                        </div>
-                        <div style={{display:'flex',gap:8,marginTop:10}}>
-                          <button style={{flex:1,fontSize:9}} className="btn-ghost" onClick={() => cycleStatus(imp, true)}>Voltar</button>
-                          <button style={{flex:1,fontSize:9}} className="btn-primary" onClick={() => cycleStatus(imp)}>Próximo</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </>}
+        {view === 'skills' && (
+          <SkillsView 
+            skills={dbData.skills}
+            onOpenModal={openSkillModal}
+            onDelete={(id) => del('skill', id)}
+          />
+        )}
 
         {/* â•â• SETTINGS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
         {view === 'settings' && <>
@@ -2714,6 +1565,19 @@ export default function Dashboard() {
             <input className="input" value={newActData.title} onChange={e => setNewActData({...newActData, title: e.target.value})}/>
             <label className="field-label">Peso</label>
             <input className="input" type="number" step="0.1" value={newActData.weight} onChange={e => setNewActData({...newActData, weight: parseFloat(e.target.value)})}/>
+            <label className="field-label">Habilidade AI de Correção</label>
+            <select className="input" value={newActData.skillId} onChange={e => setNewActData({...newActData, skillId: e.target.value})}>
+              <option value="">Padrão (Dissertativa)</option>
+              {dbData.skills.map(sk => <option key={sk.id} value={sk.id}>{sk.name}</option>)}
+              <option value="divider" disabled>──────────</option>
+              <option value="001">Sistema: Dissertativa</option>
+              <option value="002">Sistema: Objetiva (Gabarito)</option>
+              <option value="divider2" disabled>──────────</option>
+              <option value="010">Sistema: Code Reviewer (Python)</option>
+              <option value="011">Sistema: Test Generator (Pytest)</option>
+              <option value="012">Sistema: Modular Architect (Skeleton)</option>
+              <option value="013">Sistema: Google Bridge (Sheets/Drive)</option>
+            </select>
             <label className="field-label">Diretrizes Pedagógicas</label>
             <textarea className="textarea" placeholder="Descreva os critérios de avaliação e o estilo esperado..." value={newActData.description} onChange={e => setNewActData({...newActData, description: e.target.value})}/>
             <div className="modal-actions">

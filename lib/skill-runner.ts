@@ -1,235 +1,73 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { PROMPTS } from "./skills-prompts"; // Separamos os prompts para manter skill-runner limpo
+import fs from "fs";
+import path from "path";
 import { SKILLS, SkillId } from "./skills";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-interface SkillPrompts {
-  [key: string]: {
-    prompt: (params: any) => string;
-    model: "gemini-2.5-flash-lite" | "gemini-1.5-flash" | "gemini-1.5-pro";
-    responseType: "json" | "text";
-  }
-}
+export async function runSkill(skillId: string, params: any, dbRef?: any, mode: 'local' | 'remote' = 'local') {
+  let config = null;
 
-const PROMPTS: SkillPrompts = {
-  [SKILLS.GRADE_DISSERTATIVE]: {
-    model: "gemini-2.5-flash-lite",
-    responseType: "json",
-    prompt: (p) => `
-Você é um professor universitário sênior corrigindo um trabalho acadêmico. Sua linguagem deve ser humana, direta e empática, simulando uma correção feita manualmente por você.
-
-## 1. Contexto Pedagógico
-- Matéria: ${p.subject}
-- Ementa da Matéria: ${p.syllabus || "Não fornecida"}
-- Descritivo da Atividade (FOCO DA CORREÇÃO): ${p.activity_description || "Não fornecido"}
-- Critérios de Avaliação (Padrões definidos):
-${p.rag_context}
-
-## 2. Trabalho do Aluno
-- Nome: ${p.student_name}
-- Conteúdo:
-${p.student_text}
-
-## 3. Instruções de Correção:
-- Avalie de 0 a 10 com uma casa decimal baseando-se no Contexto Pedagógico.
-- Escreva EXATAMENTE 1 parágrafo CURTO, DIRETO e fluido (máximo 4-5 linhas). 
-- HUMANIZAÇÃO: Jamais mencione o nome do aluno em qualquer parte do feedback. Comece de forma direta, sem cumprimentos nominais.
-- TOM DE VOZ: Não use frases robóticas. Use uma linguagem de professor experiente.
-- ESTRUTURA: Integre em um parágrafo ÚNICO e suscinto: resumo do que foi entregue + pontos fortes + melhorias.
-- Seja o mais específico possível sobre o conteúdo do aluno em poucas palavras.
-
-Responda SOMENTE em JSON:
-{
-  "grade": <0.0 a 10.0>,
-  "feedback": "<1 parágrafo ÚNICO, denso e suscinto>",
-  "criteria_scores": {
-    "clareza": <0-10>,
-    "profundidade": <0-10>,
-    "coerencia": <0-10>,
-    "conceitos": <0-10>
-  }
-}
-    `.trim()
-  },
-  [SKILLS.GRADE_OBJECTIVE]: {
-    model: "gemini-2.5-flash-lite",
-    responseType: "json",
-    prompt: (p) => `
-Você está corrigindo um questionário de múltipla escolha.
-
-## Gabarito Oficial:
-${p.answer_key}
-
-## Respostas do Aluno (${p.student_name}):
-${p.student_answers}
-
-## Instruções:
-- Compare cada resposta com o gabarito
-- Calcule a nota proporcional (acertos / total * 10)
-- Para cada erro, explique brevemente o conceito correto
-- JAMAIAS mencione o nome do aluno no feedback (resumo do desempenho).
-
-Responda SOMENTE em JSON:
-{
-  "grade": <0.0 a 10.0>,
-  "total_questions": <número>,
-  "correct": <número de acertos>,
-  "wrong": <número de erros>,
-  "per_question": [
-    { "question": 1, "correct": true, "explanation": null },
-    { "question": 2, "correct": false, "explanation": "<conceito correto>" }
-  ],
-  "feedback": "<resumo do desempenho>"
-}
-    `.trim()
-  },
-  [SKILLS.PERSONALIZED_FEEDBACK]: {
-    model: "gemini-2.5-flash-lite",
-    responseType: "text",
-    prompt: (p) => `
-Você é um tutor educacional empático. Com base no histórico e na última correção,
-gere um feedback personalizado e motivador para o aluno.
-
-## Histórico do Aluno (${p.student_name}):
-${p.student_history}
-
-## Última Correção:
-Matéria: ${p.subject}
-Nota: ${p.grade}
-Pontos fracos: ${p.improvements}
-
-## Instruções:
-- JAMAIAS mencione o nome do aluno em qualquer parte do texto.
-- Tom encorajador e construtivo
-- Compare com desempenho anterior (melhoria ou queda)
-- Sugira recursos específicos para os pontos fracos
-- Máximo 3 parágrafos
-
-Responda em texto corrido em português, sem JSON.
-    `.trim()
-  },
-  [SKILLS.EXTRACT_WORK]: {
-    model: "gemini-2.5-flash-lite",
-    responseType: "json",
-    prompt: (p) => `
-Extraia as informações estruturadas do trabalho acadêmico abaixo.
-
-## Trabalho:
-${p.raw_text}
-
-Responda SOMENTE em JSON:
-{
-  "title": "<título do trabalho ou null>",
-  "student_name": "<nome encontrado no documento ou null>",
-  "date": "<data encontrada ou null>",
-  "word_count": <número de palavras>,
-  "sections": ["<seção 1>", "<seção 2>"],
-  "main_content": "<texto principal limpo, sem cabeçalhos>",
-  "language": "<pt|en|es>",
-  "has_bibliography": <true|false>
-}
-    `.trim()
-  },
-  [SKILLS.CLASS_SUMMARY]: {
-    model: "gemini-2.5-flash-lite",
-    responseType: "json",
-    prompt: (p) => `
-Analise o desempenho geral da turma abaixo e gere um relatório para o professor.
-
-## Dados da Turma:
-Matéria: ${p.subject}
-Total de alunos: ${p.total_students}
-Notas: ${p.grades_list}
-Média: ${p.average}
-Desvio padrão: ${p.std_dev}
-
-## Instruções:
-- Identifique padrões (tópicos mais errados, distribuição de notas)
-- Sugira ajustes pedagógicos se necessário
-- Destaque alunos em risco (nota < 5) e em destaque (nota > 9)
-- Tom profissional e objetivo
-
-Responda em JSON:
-{
-  "summary": "<parágrafo resumo>",
-  "at_risk_students": ["<nome>"],
-  "top_students": ["<nome>"],
-  "common_weaknesses": ["<tópico 1>", "<tópico 2>"],
-  "pedagogical_suggestions": ["<sugestão 1>"]
-}
-    `.trim()
-  },
-  [SKILLS.CRUD_AI]: {
-    model: "gemini-2.5-flash-lite",
-    responseType: "json",
-    prompt: (p) => `
-Você é um assistente administrativo escolar. Converta o comando abaixo em uma operação de banco de dados.
-
-## Entidades Existentes:
-Materias: ${p.existing_subjects}
-Alunos: ${p.existing_students}
-Atividades: ${p.existing_activities}
-
-## Comando do Usuário:
-"${p.user_command}"
-
-## Instruções:
-1. Identifique a operação: "CREATE", "READ", "UPDATE" ou "DELETE".
-2. Identifique a entidade: "student", "subject" ou "activity".
-3. Resolva chaves estrangeiras: se o usuário disser "na matéria Cálculo", procure o ID correspondente.
-4. Validação: se faltar dados obrigatórios (ex: nome do aluno), retorne um erro em "error".
-
-Responda SOMENTE em JSON:
-{
-  "operation": "CREATE" | "READ" | "UPDATE" | "DELETE",
-  "entity": "student" | "subject" | "activity",
-  "data": { ... },
-  "error": null | "mensagem explicativa"
-}
-    `.trim()
-  },
-  [SKILLS.GRADE_BATCH]: {
-    model: "gemini-2.5-flash-lite",
-    responseType: "json",
-    prompt: (p) => `
-Você é um professor universitário sênior responsável por corrigir um lote de trabalhos acadêmicos simultaneamente.
-
-## 1. Contexto Pedagógico (Aplicável a todos os trabalhos)
-- Matéria: ${p.subject}
-- Ementa da Matéria: ${p.syllabus || "Não fornecida"}
-- Descritivo da Atividade: ${p.activity_description || "Não fornecido"}
-- Critérios de Avaliação (Padrões definidos):
-${p.rag_context}
-
-## 2. Trabalhos dos Alunos
-Abaixo está uma lista (JSON) contendo o nome do aluno e seu respectivo trabalho:
-${JSON.stringify(p.students_works)}
-
-## 3. Instruções de Correção
-Para CADA aluno, analise o trabalho com base no Contexto Pedagógico.
-- Dê uma nota final (0.0 a 10.0).
-- Escreva EXATAMENTE 1 parágrafo CURTO, DIRETO e humano (máximo 4-5 linhas).
-- ADOTE SUA PERSONA: Você é o professor. Dirija-se ao aluno pelo nome (contido no JSON).
-- EVITE ROBOTISMO: Não use estruturas fixas ou impessoais. Varie o início das frases.
-- CONTEÚDO: O parágrafo deve conter um resumo suscinto do entregável, elogios aos pontos fortes e orientações claras de melhoria.
-
-Retorne SOMENTE um JSON válido com a seguinte estrutura:
-{
-  "corrections": [
-    {
-      "student_name": "Nome do Aluno",
-      "grade": <Nota de 0.0 a 10.0>,
-      "feedback": "<1 parágrafo ÚNICO e suscinto contendo resumo + pontos fortes + melhorias>"
+  // 1. Tentar carregar do sistema de arquivos (.agents/skills)
+  try {
+    const skillsDir = path.join(process.cwd(), '.agents', 'skills');
+    if (fs.existsSync(skillsDir)) {
+      const files = fs.readdirSync(skillsDir);
+      const skillFile = files.find(f => f.startsWith(skillId));
+      if (skillFile) {
+        const fullPath = path.join(skillsDir, skillFile);
+        const content = fs.readFileSync(fullPath, 'utf8');
+        const parts = content.split('---');
+        if (parts.length >= 3) {
+          const yaml = parts[1];
+          const promptTemplate = parts.slice(2).join('---').trim();
+          const model = yaml.match(/model:\s*(.+)/)?.[1]?.trim() || 'gemini-1.5-flash';
+          const responseType = yaml.match(/responseType:\s*(.+)/)?.[1]?.trim() || 'text';
+          
+          config = {
+            model,
+            responseType,
+            prompt: (p: any) => {
+              let pr = promptTemplate;
+              Object.keys(p).forEach(key => {
+                pr = pr.replace(new RegExp(`\\$\\{${key}\\}`, 'g'), p[key] ?? "");
+              });
+              return pr;
+            }
+          };
+        }
+      }
     }
-  ]
-}
-    `.trim()
+  } catch (e) {
+    console.warn(`Erro ao carregar skill ${skillId} do arquivo:`, e);
   }
-};
 
-export async function runSkill(skillId: SkillId, params: any) {
-  const config = PROMPTS[skillId];
-  if (!config) throw new Error(`Skill ${skillId} not implemented`);
+  // 2. Se não encontrou no arquivo, tentar no DB (Habilidades do Usuário)
+  if (!config && dbRef) {
+    const dbSkills = await dbRef.getSkills(mode);
+    const dbSkill = dbSkills.find((s: any) => s.id === skillId || s.name === skillId);
+    if (dbSkill) {
+      config = {
+        model: (dbSkill.model || "gemini-1.5-flash") as any,
+        responseType: (dbSkill.responseType || "text") as any,
+        prompt: (p: any) => {
+          let pr = dbSkill.promptTemplate || "";
+          Object.keys(p).forEach(key => {
+            pr = pr.replace(new RegExp(`\\$\\{${key}\\}`, 'g'), p[key] ?? "");
+          });
+          return pr;
+        }
+      };
+    }
+  }
+
+  // 3. Se não encontrou, usar o hardcoded (Fallback legado)
+  if (!config) {
+    config = (PROMPTS as any)[skillId];
+  }
+
+  if (!config) throw new Error(`Skill ${skillId} não implementada em .agents/skills, DB ou PROMPTS.`);
 
   const model = genAI.getGenerativeModel({ model: config.model });
   const prompt = config.prompt(params);

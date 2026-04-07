@@ -81,14 +81,14 @@ Avaliar clareza, coesão e domínio técnico.
       throw new Error("Nenhum arquivo ou URL do Drive fornecido");
     }
 
-    const parsed = await runSkill(SKILLS.GRADE_DISSERTATIVE, {
+    const parsed = await runSkill((actDetails as any)?.skillId || SKILLS.GRADE_DISSERTATIVE, {
       student_name: item.studentName,
       subject: item.subject,
       syllabus: subDetails?.syllabus,
       activity_description: (actDetails as any)?.description,
       student_text: studentText,
       rag_context: pedagogicalContext,
-    });
+    }, db, mode);
 
     // CRITICAL: Prefix feedback with activity title so dashboard grouping works
     const activityPrefix = item.activity ? `Atividade: ${item.activity}\n` : '';

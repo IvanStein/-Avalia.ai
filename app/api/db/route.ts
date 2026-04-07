@@ -13,16 +13,17 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(result);
     }
 
-    const [subjects, students, activities, implementacoes, submissions, configs] = await Promise.all([
+    const [subjects, students, activities, implementacoes, submissions, configs, skills] = await Promise.all([
       db.getSubjects(mode),
       db.getStudents(mode),
       db.getActivities(mode),
       db.getImplementacoes(mode),
       db.getSubmissions(mode),
       db.getConfigs(mode),
+      db.getSkills(mode),
     ]);
 
-    return NextResponse.json({ subjects, students, activities, turmas: [], implementacoes, submissions, configs });
+    return NextResponse.json({ subjects, students, activities, turmas: [], implementacoes, submissions, configs, skills });
   } catch (err: any) {
     console.error('API GET DB Error:', err);
     await db.logError(err?.message || 'Erro Desconhecido no GET Inicial', JSON.stringify({ stack: err?.stack, action: 'GET' }), mode);
@@ -62,10 +63,10 @@ export async function POST(req: NextRequest) {
         result = await db.updateStudentSubjects(data.id, data.subjectIds, mode);
         break;
       case 'activity':
-        result = await db.addActivity(data.subjectId, data.title, data.weight, data.description || '', mode);
+        result = await db.addActivity(data.subjectId, data.title, data.weight, data.description || '', data.skillId || '', mode);
         break;
       case 'activity-update':
-        result = await db.updateActivity(data.id, data.subjectId, data.title, data.weight, data.description || '', mode);
+        result = await db.updateActivity(data.id, data.subjectId, data.title, data.weight, data.description || '', data.skillId || '', mode);
         break;
       case 'implementacao':
         result = await db.addImplementacao(data.title, data.description, data.priority || 'media', data.category || '', data.imageUrl || '', mode);
@@ -84,6 +85,12 @@ export async function POST(req: NextRequest) {
         break;
       case 'configs':
         result = await db.saveConfigs(data, mode);
+        break;
+      case 'skill':
+        result = await db.addSkill(data.name, data.description, data.promptTemplate, data.model, data.responseType, mode);
+        break;
+      case 'skill-update':
+        result = await db.updateSkill(data.id, data.name, data.description, data.promptTemplate, data.model, data.responseType, mode);
         break;
       default:
         return NextResponse.json({ error: 'Entidade inválida' }, { status: 400 });
@@ -108,6 +115,7 @@ export async function DELETE(req: NextRequest) {
       case 'activity':    result = await db.deleteActivity(id, mode);      break;
       case 'implementacao': result = await db.deleteImplementacao(id, mode); break;
       case 'submission':  result = await db.deleteSubmission(id, mode);    break;
+      case 'skill':       result = await db.deleteSkill(id, mode);         break;
       default:
         return NextResponse.json({ error: 'Entidade inválida' }, { status: 400 });
     }

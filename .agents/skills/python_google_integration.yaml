@@ -1,0 +1,122 @@
+id: python_google_integration
+name: Python Google Integration (Auth + Sheets + NotebookLM)
+
+description: >
+  Skill para integrar sistemas Python com serviços Google, incluindo autenticação de usuário via Gmail (OAuth),
+  leitura e escrita em Google Sheets, e consumo de conteúdo do NotebookLM. Segue princípios de engenharia de software
+  com arquitetura modular, baixo acoplamento e separação de responsabilidades.
+
+language: pt-BR
+
+activation:
+  keywords:
+    - integrar google
+    - login gmail
+    - google sheets
+    - planilhas google
+    - notebooklm
+    - autenticação google
+
+principles:
+  - SOLID (ênfase em SRP e DIP)
+  - Clean Architecture simplificada
+  - Separation of Concerns
+  - Segurança (OAuth2)
+  - Baixo acoplamento
+
+rules:
+  - Nunca gerar integração em um único arquivo
+  - Separar em camadas:
+      - domain
+      - application
+      - infrastructure
+      - interface
+      - shared
+  - Autenticação deve usar OAuth2 (Google)
+  - Nunca expor credenciais no código
+  - Usar variáveis de ambiente para secrets
+  - Criar serviços separados para:
+      - autenticação
+      - google sheets
+      - notebooklm
+  - Controllers devem ser simples
+  - Código deve ser executável localmente
+
+behaviors:
+  - Explicar fluxo de autenticação Google
+  - Gerar estrutura modular completa
+  - Criar serviços desacoplados
+  - Sugerir configuração de credenciais
+  - Incluir exemplos de uso
+  - Incluir testes básicos (mockados)
+
+architecture_template:
+  structure: |
+    /src
+      /domain
+      /application
+      /infrastructure
+        /google
+      /interface
+      /shared
+    /tests
+
+services:
+  google_auth:
+    description: "Autenticação de usuário via OAuth2 com Gmail"
+  google_sheets:
+    description: "Leitura e escrita em Google Sheets"
+  notebooklm:
+    description: "Consulta e uso de conteúdo do NotebookLM (via API ou ingestão)"
+
+output_format:
+  sections:
+    - architecture_overview
+    - folder_structure
+    - files
+    - setup_instructions
+    - tests
+
+constraints:
+  forbidden:
+    - credenciais hardcoded
+    - código monolítico
+    - mistura de responsabilidades
+
+  required:
+    - uso de OAuth2
+    - separação de serviços
+    - uso de .env
+    - exemplo funcional
+
+dependencies_allowed:
+  - google-auth
+  - google-auth-oauthlib
+  - google-api-python-client
+  - gspread (opcional)
+  - requests
+
+code_style:
+  python:
+    - simples e legível
+    - funções pequenas
+    - evitar complexidade
+
+security:
+  - usar variáveis de ambiente
+  - nunca expor client_secret
+  - validar tokens
+
+api_guidelines:
+  versioning: true
+  pattern: "/v1/"
+
+test_generation:
+  framework: pytest
+  rules:
+    - mockar chamadas externas
+    - não usar APIs reais nos testes
+
+final_instruction: >
+  Gerar integração com Google e NotebookLM de forma segura, modular e simples,
+  pronta para uso real sem comprometer a arquitetura.  
