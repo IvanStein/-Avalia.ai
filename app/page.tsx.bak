@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
@@ -1397,6 +1397,29 @@ export default function Dashboard() {
                     Baixar Base da Nuvem
                   </button>
                 )}
+              </div>
+            </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+                <div style={{ background: 'var(--accent)20', padding: 12, borderRadius: 12 }}>
+                  <Database size={24} color="var(--accent)"/>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 600 }}>Fonte de Dados</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text2)' }}>Determine onde as informações do sistema são armazenadas e lidas.</p>
+                </div>
+                <div className="toggle-group" style={{ marginTop: 0, minWidth: 260 }}>
+                  <button className={dbMode === 'local' ? 'active' : ''} onClick={() => setDbMode('local')}>
+                    📂 JSON Local
+                  </button>
+                  <button className={dbMode === 'remote' ? 'active' : ''} onClick={() => setDbMode('remote')}>
+                    â˜ï¸ Supabase Cloud
+                  </button>
+                </div>
+              </div>
+              <div style={{ fontSize: 12, padding: '10px 16px', background: 'var(--surface2)', borderRadius: 8, color: 'var(--text2)', border: '1px solid var(--border)' }}>
+                {dbMode === 'remote' 
+                  ? '✅ Modo Nuvem ativo: Sincronização em tempo real e persistência global habilitada.' 
+                  : '⚠️ Modo Local ativo: Os dados serão salvos apenas no sistema de arquivos deste servidor local.'}
               </div>
             </div>
 
