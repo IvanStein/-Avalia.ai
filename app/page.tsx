@@ -1687,6 +1687,75 @@ export default function Dashboard() {
       )}
 
       {/* â•â• MODAL: IMPORTAR ATIVIDADES DO TEXTO â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+      {/* ── MODAL: NOVA HABILIDADE ─────────────────────────────────────────── */}
+      {showSkillModal && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: 640 }}>
+            <div className="modal-header">
+              <h2>{editingSkill ? 'Editar Habilidade' : 'Nova Habilidade de IA'}</h2>
+              <button className="btn-close" onClick={() => setShowSkillModal(false)}>×</button>
+            </div>
+
+            <label className="field-label">Nome da Habilidade</label>
+            <input
+              className="input"
+              placeholder="Ex: Correção de Relatório Técnico"
+              value={newSkillData.name}
+              onChange={e => setNewSkillData({ ...newSkillData, name: e.target.value })}
+            />
+
+            <label className="field-label">Descrição (opcional)</label>
+            <input
+              className="input"
+              placeholder="Ex: Avalia relatórios com foco em estrutura e ABNT"
+              value={newSkillData.description}
+              onChange={e => setNewSkillData({ ...newSkillData, description: e.target.value })}
+            />
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div>
+                <label className="field-label">Modelo de IA</label>
+                <select className="input" value={newSkillData.model} onChange={e => setNewSkillData({ ...newSkillData, model: e.target.value })}>
+                  <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (Mais rápido)</option>
+                  <option value="gemini-1.5-flash">Gemini 1.5 Flash (Rápido)</option>
+                  <option value="gemini-1.5-pro">Gemini 1.5 Pro (Mais potente)</option>
+                </select>
+              </div>
+              <div>
+                <label className="field-label">Tipo de Resposta</label>
+                <select className="input" value={newSkillData.responseType} onChange={e => setNewSkillData({ ...newSkillData, responseType: e.target.value })}>
+                  <option value="json">⚙ JSON (Estruturado)</option>
+                  <option value="text">📝 Texto (Livre)</option>
+                </select>
+              </div>
+            </div>
+
+            <label className="field-label">Template do Prompt *</label>
+            <p style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 8 }}>
+              Use <code style={{ background: 'var(--surface2)', padding: '1px 5px', borderRadius: 4, fontSize: 10 }}>{'${student_name}'}</code>,{' '}
+              <code style={{ background: 'var(--surface2)', padding: '1px 5px', borderRadius: 4, fontSize: 10 }}>{'${subject}'}</code>,{' '}
+              <code style={{ background: 'var(--surface2)', padding: '1px 5px', borderRadius: 4, fontSize: 10 }}>{'${student_text}'}</code>{' '}
+              para substituição automática.
+            </p>
+            <textarea
+              className="textarea"
+              rows={8}
+              style={{ fontFamily: 'monospace', fontSize: 12 }}
+              placeholder={'Você é um avaliador pedagógico...\n\nAvalie o texto de ${student_name} na matéria ${subject}:\n\n${student_text}\n\nRetorne um JSON com { grade: number, feedback: string }.'}
+              value={newSkillData.promptTemplate}
+              onChange={e => setNewSkillData({ ...newSkillData, promptTemplate: e.target.value })}
+            />
+
+            <div className="modal-actions">
+              <button className="btn-ghost" onClick={() => setShowSkillModal(false)}>Cancelar</button>
+              <button className="btn-primary" onClick={saveSkill}>
+                <Sparkles size={15} /> {editingSkill ? 'Salvar Alterações' : 'Criar Habilidade'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showImportActModal && (
         <div className="modal-overlay">
           <div className="modal" style={{ maxWidth: 800 }}>

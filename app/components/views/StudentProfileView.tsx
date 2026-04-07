@@ -68,7 +68,7 @@ export function StudentProfileView({
         ${actTitle ? `<p class="activity-label">Atividade Avaliada</p><p class="activity-title">${actTitle}</p>` : ""}
         <div class="activity-label">Feedback da Avaliação</div>
         <div class="feedback-box">${content.replace(/\n/g, "<br/>")}</div>
-        <div class="footer">Gerado por Aval.IA · ${student.subject || sub.subject}</div>
+        <div class="footer">Gerado por Aval.IA · ${sub.subject}</div>
         <script>window.onload = () => { window.print(); window.close(); }<\/script>
       </body>
       </html>
