@@ -83,18 +83,18 @@ export function EnrollmentView({
                 checked={isClosed} 
                 onChange={() => onToggleSubjectClosed(enrollSubjectId, !isClosed)} 
               />
-              <span>Bloquear Enturmação (Matéria Fechada)</span>
+              <span>Bloquear inscrições (Matéria Fechada)</span>
             </label>
           )}
         </div>
       </header>
 
       {!enrollSubjectId ? (
-        <div className="empty-state"><Users size={40}/><p>Selecione uma matéria acima para começar a enturmar.</p></div>
+        <div className="empty-state"><Users size={40}/><p>Selecione uma matéria acima para vincular alunos à turma.</p></div>
       ) : (
         <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:24}} className="fade-in">
           <div style={{background:'var(--surface)', padding:16, borderRadius:12, border:'1px solid var(--border)', display:'flex', flexDirection:'column'}}>
-            <h3 style={{marginBottom:16, display:'flex', alignItems:'center', gap:8}}><UserPlus size={16}/> Não Enturmados <span className="badge">{notInSubject.length}</span></h3>
+            <h3 style={{marginBottom:16, display:'flex', alignItems:'center', gap:8}}><UserPlus size={16}/> Sem Turma <span className="badge">{notInSubject.length}</span></h3>
             <div style={{display:'flex', flexDirection:'column', gap:8, flex:1, overflowY:'auto'}}>
               {notInSubject.map(s => <StudentCard key={s.id} s={s} onDoubleClick={() => onToggleStudentEnrollment(s)}/>)}
               {notInSubject.length === 0 && <p style={{fontSize:12, color:'var(--text2)', textAlign:'center', marginTop:20}}>Todos os alunos cadastrados já estão nesta matéria.</p>}

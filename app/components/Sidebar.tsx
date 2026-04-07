@@ -16,7 +16,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ClipboardCheck,
-  Package
+  Package,
+  UsersRound
 } from "lucide-react";
 
 interface SidebarProps {
@@ -47,7 +48,7 @@ export function Sidebar({ view, setView, collapsed, setCollapsed }: SidebarProps
         <NavItem v="dashboard"      icon={LayoutDashboard} label="Dashboard"/>
         <NavItem v="subjects"       icon={BookOpen}        label="Matérias"/>
         <NavItem v="students"       icon={Users}           label="Alunos"/>
-        <NavItem v="enrollment"     icon={Package}         label="Enturmação"/>
+        <NavItem v="enrollment"     icon={UsersRound}      label="Turmas"/>
         <NavItem v="activities"     icon={ClipboardCheck}  label="Atividades"/>
         
         <p className="nav-label">Avaliação</p>
