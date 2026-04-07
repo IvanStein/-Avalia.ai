@@ -24,6 +24,16 @@ export function DashboardView({
   getStatusConfig,
   getActName
 }: DashboardViewProps) {
+  
+  // Cálculo de Média por Matéria para o gráfico
+  const subjectStats = dbData.subjects.map(sub => {
+    const subs = dbData.submissions.filter(s => s.subject === sub.name && s.status === 'graded');
+    const avg = subs.length > 0 
+      ? subs.reduce((acc, curr) => acc + (curr.grade || 0), 0) / subs.length 
+      : 0;
+    return { name: sub.name, avg, count: subs.length };
+  }).filter(s => s.count > 0).slice(0, 5);
+
   return (
     <>
       <header className="header">
@@ -67,7 +77,7 @@ export function DashboardView({
                           <cfg.icon size={11}/> {s.grade?.toFixed(1) ?? '—'}
                         </span>
                       </td>
-                      <td className="td-muted" style={{fontSize:11}}>{s.submittedAt.split(' ')[0]}</td>
+                      <td className="td-muted" style={{fontSize:11}}>{s.submittedAt.split('T')[0]}</td>
                       <td><div className="actions" style={{justifyContent:'flex-end'}}><ChevronRight size={14}/></div></td>
                     </tr>
                   );
@@ -89,11 +99,33 @@ export function DashboardView({
           </div>
 
           <div style={{background:'var(--surface)',padding:24,borderRadius:16,border:'1px solid var(--border)',flex:1}}>
-            <h2 style={{fontSize:15,fontWeight:600,marginBottom:12}}>Status da Turma</h2>
-            <p style={{fontSize:12,color:'var(--text2)',marginBottom:16}}>Desempenho consolidado das últimas 48h.</p>
-            <div style={{display:'flex',alignItems:'flex-end',gap:4,height:80}}>
-              {[40,70,50,90,30,80,95,60,40,70].map((h,i) => <div key={i} style={{flex:1,background:'linear-gradient(to top, var(--accent), var(--accent2))',height:`${h}%`,borderRadius:'4px 4px 0 0',opacity:0.3+ (h/200)}} />)}
-            </div>
+            <h2 style={{fontSize:15,fontWeight:600,marginBottom:8}}>Desempenho por Matéria</h2>
+            <p style={{fontSize:12,color:'var(--text2)',marginBottom:20}}>Média global de notas reais.</p>
+            
+            {subjectStats.length === 0 ? (
+              <div style={{height:100, display:'flex', alignItems:'center', justifyContent:'center', color:'var(--text3)', fontSize:12, background:'var(--surface2)', borderRadius:12, border:'1px dashed var(--border)'}}>
+                Aguardando submissões...
+              </div>
+            ) : (
+              <div style={{display:'flex', flexDirection:'column', gap:12}}>
+                {subjectStats.map((s, idx) => (
+                  <div key={idx}>
+                    <div style={{display:'flex', justifyContent:'space-between', fontSize:11, marginBottom:4}}>
+                      <span style={{fontWeight:600, color:'var(--text2)'}}>{s.name}</span>
+                      <span style={{fontWeight:700, color: s.avg >= 7 ? 'var(--blue)' : 'var(--red)'}}>{s.avg.toFixed(1)}</span>
+                    </div>
+                    <div style={{height:6, background:'var(--surface2)', borderRadius:3, overflow:'hidden'}}>
+                      <div style={{
+                        height:'100%', 
+                        width:`${(s.avg / 10) * 100}%`, 
+                        background: s.avg >= 7 ? 'var(--blue)' : 'var(--red)',
+                        opacity: 0.8
+                      }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
