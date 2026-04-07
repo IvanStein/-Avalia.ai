@@ -1,5 +1,5 @@
 import React from "react";
-import { Users, UserPlus, CheckCircle } from "lucide-react";
+import { Users, UserPlus, CheckCircle, Info } from "lucide-react";
 import { Student, Subject } from "@/lib/types";
 
 interface EnrollmentViewProps {
@@ -57,7 +57,19 @@ export function EnrollmentView({
   return (
     <>
       <header className="header" style={{flexDirection:'column', alignItems:'flex-start', gap:16}}>
-        <div><h1>Enturmação</h1><p className="subtitle">Associe alunos a matérias clicando duas vezes sobre o card.</p></div>
+        <div>
+          <h1>Turmas — Junção Aluno × Matéria</h1>
+          <p className="subtitle">Vincule cada aluno a uma matéria para que ele apareça nas correções e relatórios.</p>
+        </div>
+        <div style={{display:'flex', alignItems:'flex-start', gap:10, padding:'12px 16px', background:'var(--accent)10', border:'1px solid var(--accent)30', borderRadius:10, maxWidth:680, fontSize:12.5, color:'var(--text2)', lineHeight:1.6}}>
+          <Info size={16} style={{flexShrink:0, marginTop:1}} color="var(--accent)"/>
+          <div>
+            <strong style={{color:'var(--text)'}}>Como usar:</strong>{' '}
+            1. Selecione uma <strong>Matéria</strong> no seletor abaixo.{' '}
+            2. Na coluna <em>Não Vinculados</em>, <strong>dê dois cliques</strong> no card do aluno para movê-lo para a turma.{' '}
+            3. Para remover um aluno da turma, <strong>dê dois cliques</strong> no card dele na coluna da direita.
+          </div>
+        </div>
         <div style={{display:'flex', gap:16, alignItems:'center', flexWrap:'wrap'}}>
           <select className="input" style={{maxWidth:300, background:'var(--surface)'}} value={enrollSubjectId} onChange={e => setEnrollSubjectId(e.target.value)}>
             <option value="">-- Selecione uma matéria --</option>

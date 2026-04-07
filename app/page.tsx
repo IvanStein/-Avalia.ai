@@ -31,6 +31,7 @@ import { ManualGradingView } from "./components/views/ManualGradingView";
 import { CopyActivitiesView } from "./components/views/CopyActivitiesView";
 import { ReportsView } from "./components/views/ReportsView";
 import { StudentProfileView } from "./components/views/StudentProfileView";
+import { SettingsView } from "./components/views/SettingsView";
 import { getStatusConfig } from "./components/StatusPill";
 
 export interface BatchEntry {
@@ -903,6 +904,30 @@ export default function Dashboard() {
     setManuSaving(false);
   };
 
+  const handleAuditRequest = async (id: string) => {
+    try {
+      await apiPost('submission-update', { id, status: 'audit_pending' });
+      alert('Solicitação de auditoria enviada com sucesso! O trabalho agora está na fila pedagógica.');
+      fetchDB();
+    } catch (e: any) { alert(e.message); }
+  };
+
+  const handleCopyCloudToLocal = async () => {
+    if (!confirm('Esta ação irá SOBRESCREVER sua base LOCAL com os dados da NUVEM. Deseja continuar?')) return;
+    try {
+      setLoading(true);
+      const remoteRes = await fetch('/api/db?mode=remote');
+      if (!remoteRes.ok) throw new Error('Falha ao buscar dados remotos');
+      const remoteData = await remoteRes.json();
+      const res = await apiPost('sync-cloud-to-local', remoteData);
+      if (res.error) throw new Error(res.error);
+      setDbMode('local');
+      fetchDB();
+      alert('Base de dados sincronizada com sucesso!');
+    } catch (e: any) { alert(`Erro na sincronização: ${e.message}`); }
+    finally { setLoading(false); }
+  };
+
   const handleCopyActivities = async () => {
     if (!copySubjectId || (!copyDestSubjectId && !newSubjectName)) {
       return alert('Selecione a matéria de origem e o destino (ou nome da nova matéria).');
@@ -1152,6 +1177,7 @@ export default function Dashboard() {
               await apiPost('batch-state', null);
             }}
             syllabusChunks={syllabusChunks}
+            onAuditRequest={handleAuditRequest}
           />
         )}
 
@@ -1211,6 +1237,7 @@ export default function Dashboard() {
         )}
 
         {/* â•â• LANÇAMENTO (COPIA E COLA) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+        {/* ── LANÇAMENTO (COPIA E COLA) ────────────────────────────────────────── */}
         {view === 'copy' && (
           <CopyActivitiesView
             dbData={dbData}
@@ -1231,7 +1258,7 @@ export default function Dashboard() {
           />
         )}
 
-        {/* â•â• RELATÓRIOS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+        {/* ── RELATÓRIOS ────────────────────────────────────────────────────────── */}
         {view === 'reports' && (
           <ReportsView
             dbData={dbData}
@@ -1296,8 +1323,6 @@ export default function Dashboard() {
             getActName={getActName}
           />
         )}
-
-        {/* â• â•  STUDENT PROFILE â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â•  */}
         {view === 'student-profile' && selectedStudentId && (() => {
           const stu = dbData.students.find(s => s.id === selectedStudentId);
           if (!stu) return null;
@@ -1341,6 +1366,39 @@ export default function Dashboard() {
           <div className="fade-in" style={{ padding: '0 4px', maxWidth: 1000 }}>
             {/* Database Selection Card */}
             <div className="card" style={{ padding: 24, marginBottom: 24, border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+                <div style={{ background: 'var(--accent)20', padding: 12, borderRadius: 12 }}>
+                  <Database size={24} color="var(--accent)"/>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 600 }}>Fonte de Dados</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text2)' }}>Determine onde as informações do sistema são armazenadas e lidas.</p>
+                </div>
+                <div className="toggle-group" style={{ marginTop: 0, minWidth: 260 }}>
+                  <button className={dbMode === 'local' ? 'active' : ''} onClick={() => setDbMode('local')}>
+                    📂 JSON Local
+                  </button>
+                  <button className={dbMode === 'remote' ? 'active' : ''} onClick={() => setDbMode('remote')}>
+                    ☁️ Supabase Cloud
+                  </button>
+                </div>
+              </div>
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '12px 16px', background: 'var(--surface2)', borderRadius: 8, color: 'var(--text2)', border: '1px solid var(--border)' }}>
+                <div>
+                  {dbMode === 'remote' 
+                    ? '✅ Modo Nuvem ativo: Sincronização em tempo real e persistência global habilitada.' 
+                    : '⚠️ Modo Local ativo: Os dados serão salvos apenas no sistema de arquivos deste servidor local.'}
+                </div>
+                {dbMode === 'local' && (
+                  <button className="btn-ghost" style={{ background: 'var(--surface1)', padding: '6px 12px', height: 'auto', fontSize: 11, display: 'flex', alignItems: 'center', gap: 6 }} 
+                    disabled={loading} onClick={handleCopyCloudToLocal}>
+                    {loading ? <RefreshCw className="spin" size={12}/> : <RefreshCw size={12}/>}
+                    Baixar Base da Nuvem
+                  </button>
+                )}
+              </div>
+            </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
                 <div style={{ background: 'var(--accent)20', padding: 12, borderRadius: 12 }}>
                   <Database size={24} color="var(--accent)"/>
