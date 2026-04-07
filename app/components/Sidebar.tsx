@@ -16,8 +16,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ClipboardCheck,
-  Package,
-  UsersRound
+  UsersRound,
+  Copy
 } from "lucide-react";
 
 interface SidebarProps {
@@ -53,6 +53,7 @@ export function Sidebar({ view, setView, collapsed, setCollapsed }: SidebarProps
         
         <p className="nav-label">Avaliação</p>
         <NavItem v="batch"          icon={Layers}          label="Correção Lote"/>
+        <NavItem v="canvas"         icon={Copy}            label="Lançamento (Canvas)"/>
         <NavItem v="audit"          icon={FileText}        label="Auditoria"/>
         <NavItem v="reports"        icon={BarChart2}       label="Relatórios"/>
         

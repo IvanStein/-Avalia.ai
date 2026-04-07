@@ -278,16 +278,33 @@ export default function Dashboard() {
 
     const gradedSubmissions = Array.from(uniqueMap.values());
     const subjectStudents = dbData.students.filter(s => (s.subjectIds || []).includes(reportSubjectId));
-    const studentsWithDelivery = new Set(gradedSubmissions.map(gs => gs.studentName));
+
+    // Taxa de entrega: (pares aluno-atividade c/ entrega) / (alunos × atividades)
+    // Para relatório de atividade: alunos que entregaram / total de alunos
+    const numStudents = subjectStudents.length;
+    let participation = '0';
+    if (numStudents > 0) {
+      if (reportType === 'activity') {
+        const studentsWithDelivery = new Set(gradedSubmissions.map(gs => gs.studentName));
+        participation = ((studentsWithDelivery.size / numStudents) * 100).toFixed(0);
+      } else {
+        // Modo matéria: conta pares únicos (aluno × atividade) c/ entrega
+        const numActs = acts.length;
+        if (numActs > 0) {
+          const totalPossible = numStudents * numActs;
+          participation = ((gradedSubmissions.length / totalPossible) * 100).toFixed(0);
+        } else {
+          participation = '0';
+        }
+      }
+    }
     
     const stats = {
       totalGraded: gradedSubmissions.length,
       classAvg: gradedSubmissions.length > 0 
         ? (gradedSubmissions.reduce((acc, curr) => acc + (curr.grade || 0), 0) / gradedSubmissions.length).toFixed(1)
         : '0.0',
-      participation: subjectStudents.length > 0
-        ? ((studentsWithDelivery.size / subjectStudents.length) * 100).toFixed(0)
-        : '0'
+      participation
     };
 
     return { head, body, title: reportType === 'subject' ? sub?.name : `${sub?.name} - ${act?.title}`, isMatrix: reportType === 'subject', stats };
@@ -1306,7 +1323,8 @@ export default function Dashboard() {
             auditNote={auditNote}
             setAuditNote={setAuditNote}
             onSaveAudit={async (finish) => {
-              const activeAudit = dbData.submissions.filter(s => s.status === 'audit_pending').find(s => s.id === auditSubId);
+              const pendingList = dbData.submissions.filter(s => s.status === 'audit_pending');
+              const activeAudit = pendingList.find(s => s.id === auditSubId) || pendingList[0];
               if (!activeAudit) return;
               try {
                 await apiPost('submission-update', { 
@@ -1314,9 +1332,15 @@ export default function Dashboard() {
                   auditNotes: auditNote,
                   status: finish ? 'audited' : 'audit_pending'
                 });
-                alert(finish ? 'Auditoria finalizada! O caso agora serve como referência pedagógica.' : 'Observação salva com sucesso.');
+                if (finish) {
+                  // Avança para o próximo caso da fila (excluindo o atual)
+                  const remaining = pendingList.filter(s => s.id !== activeAudit.id);
+                  const nextId = remaining.length > 0 ? remaining[0].id : null;
+                  setAuditSubId(nextId);
+                  setAuditNote('');
+                }
+                alert(finish ? 'Auditoria finalizada! Avançando para o próximo caso.' : 'Observação salva com sucesso.');
                 fetchDB();
-                if (finish) setAuditSubId(null);
               } catch (e: any) { alert(e.message); }
             }}
             onGenerateReport={generateAuditReport}
