@@ -1218,6 +1218,9 @@ export default function Dashboard() {
             onReset={async () => {
               setBatchEntries([]);
               setBatchReport(null);
+              setBatchSubjectId('');
+              setBatchActivityId('');
+              setBatchStep('upload');
               await apiPost('batch-state', null);
             }}
             syllabusChunks={syllabusChunks}
