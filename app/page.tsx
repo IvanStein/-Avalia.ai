@@ -1088,6 +1088,22 @@ export default function Dashboard() {
     }
   };
 
+  const deleteActivitySubmissions = async (subjectId: string, activityTitle: string) => {
+    const sub = dbData.subjects.find(s => s.id === subjectId);
+    if (!sub) return;
+    const toDelete = dbData.submissions.filter(s => s.subject === sub.name && getActName(s.feedback || '') === activityTitle);
+    if (toDelete.length === 0) return;
+    
+    try {
+      setLoading(true);
+      for (const s of toDelete) {
+        await apiPost('delete', { type: 'submission', id: s.id });
+      }
+      await fetchDB();
+    } catch (e: any) { alert("Erro ao apagar: " + e.message); }
+    finally { setLoading(false); }
+  };
+
   if (!hasMounted) return null;
 
 
@@ -1134,6 +1150,7 @@ export default function Dashboard() {
               setExpandedActivities={setExpandedActivities}
               onSelectSubmission={setSelected}
               onDeleteSubmission={(id) => del('submission', id)}
+              onDeleteActivitySubmissions={deleteActivitySubmissions}
               onNavigateToBatch={() => setView('batch')}
               getStatusConfig={getStatusConfig}
               getActName={getActName}

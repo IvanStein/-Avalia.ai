@@ -10,6 +10,7 @@ interface ConsolidatedActivityViewProps {
   setExpandedActivities: (v: any) => void;
   onSelectSubmission: (s: Submission) => void;
   onDeleteSubmission: (id: string) => void;
+  onDeleteActivitySubmissions: (subjectId: string, activityTitle: string) => void;
   onNavigateToBatch: () => void;
   getStatusConfig: (status: string) => any;
   getActName: (feedback: string) => string | null;
@@ -23,6 +24,7 @@ export function ConsolidatedActivityView({
   setExpandedActivities,
   onSelectSubmission,
   onDeleteSubmission,
+  onDeleteActivitySubmissions,
   onNavigateToBatch,
   getStatusConfig,
   getActName
@@ -82,6 +84,21 @@ export function ConsolidatedActivityView({
                           </div>
                         </div>
                         <div style={{display:'flex', alignItems:'center', gap:12}}>
+                           {subsForAct.length > 0 && (
+                             <button 
+                               className="btn-icon-danger" 
+                               style={{padding:6}}
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 if (window.confirm(`Deseja apagar TODAS as ${subsForAct.length} avaliações desta atividade?`)) {
+                                   onDeleteActivitySubmissions(sub.id, a.title);
+                                 }
+                               }}
+                               title="Apagar todas as avaliações desta atividade"
+                             >
+                               <Trash2 size={16}/>
+                             </button>
+                           )}
                            {isActExpanded ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
                         </div>
                       </div>
