@@ -1097,7 +1097,7 @@ export default function Dashboard() {
     try {
       setLoading(true);
       for (const s of toDelete) {
-        await apiPost('delete', { type: 'submission', id: s.id });
+        await apiDelete('submission', s.id);
       }
       await fetchDB();
     } catch (e: any) { alert("Erro ao apagar: " + e.message); }
