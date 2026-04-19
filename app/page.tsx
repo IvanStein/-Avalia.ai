@@ -33,6 +33,7 @@ import { CopyActivitiesView } from "./components/views/CopyActivitiesView";
 import { ReportsView } from "./components/views/ReportsView";
 import { StudentProfileView } from "./components/views/StudentProfileView";
 import { SettingsView } from "./components/views/SettingsView";
+import { GradeClosingView } from "./components/views/GradeClosingView";
 import { getStatusConfig } from "./components/StatusPill";
 
 export interface BatchEntry {
@@ -1467,6 +1468,13 @@ export default function Dashboard() {
             onOpenModal={openImplModal}
             onDelete={(id) => del('implementacao', id)}
             implStatus={IMPL_STATUS}
+          />
+        )}
+
+        {view === 'grade-closing' && (
+          <GradeClosingView
+            dbData={dbData}
+            getActName={getActName}
           />
         )}
 

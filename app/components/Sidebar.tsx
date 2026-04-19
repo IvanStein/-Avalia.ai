@@ -18,7 +18,8 @@ import {
   ClipboardCheck,
   UsersRound,
   Copy,
-  Edit3
+  Edit3,
+  CheckSquare
 } from "lucide-react";
 
 interface SidebarProps {
@@ -56,6 +57,7 @@ export function Sidebar({ view, setView, collapsed, setCollapsed }: SidebarProps
         <NavItem v="grade-entry"    icon={Edit3}           label="Correção de Prova"/>
         <NavItem v="batch"          icon={Layers}          label="Correção Lote"/>
         <NavItem v="canvas"         icon={Copy}            label="Lançamento (Canvas)"/>
+        <NavItem v="grade-closing"  icon={CheckSquare}     label="Fechamento Bimestre"/>
         <NavItem v="audit"          icon={FileText}        label="Auditoria"/>
         <NavItem v="reports"        icon={BarChart2}       label="Relatórios"/>
         
