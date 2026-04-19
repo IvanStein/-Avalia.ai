@@ -53,7 +53,7 @@ export function Sidebar({ view, setView, collapsed, setCollapsed }: SidebarProps
         <NavItem v="activities"     icon={ClipboardCheck}  label="Atividades"/>
         
         <p className="nav-label">Avaliação</p>
-        <NavItem v="grade-entry"    icon={Edit3}           label="Lançar Notas"/>
+        <NavItem v="grade-entry"    icon={Edit3}           label="Correção de Prova"/>
         <NavItem v="batch"          icon={Layers}          label="Correção Lote"/>
         <NavItem v="canvas"         icon={Copy}            label="Lançamento (Canvas)"/>
         <NavItem v="audit"          icon={FileText}        label="Auditoria"/>
