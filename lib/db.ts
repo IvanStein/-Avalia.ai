@@ -236,22 +236,22 @@ export const db = {
     }
     return readDB().activities;
   },
-  addActivity: async (subjectId: string, title: string, weight: number, description: string, skillId: string = '', applicationDate: string = '', mode: 'local' | 'remote' = 'local') => {
+  addActivity: async (subjectId: string, title: string, weight: number, description: string, skillId: string = '', applicationDate: string = '', type: 'atividade' | 'prova' = 'atividade', mode: 'local' | 'remote' = 'local') => {
     const id = 'a' + Date.now().toString();
     if (mode === 'remote') {
-      await sql`INSERT INTO activities (id, subject_id, title, weight, description, skill_id, application_date) VALUES (${id}, ${subjectId}, ${title}, ${weight}, ${description}, ${skillId}, ${applicationDate})`;
-      return { id, subjectId, title, weight, description, skillId, applicationDate };
+      await sql`INSERT INTO activities (id, subject_id, title, weight, description, skill_id, application_date, type) VALUES (${id}, ${subjectId}, ${title}, ${weight}, ${description}, ${skillId}, ${applicationDate}, ${type})`;
+      return { id, subjectId, title, weight, description, skillId, applicationDate, type };
     }
     const data = readDB();
-    const newAct = { id, subjectId, title, weight, description, skillId, applicationDate };
+    const newAct = { id, subjectId, title, weight, description, skillId, applicationDate, type };
     data.activities.push(newAct);
     saveDB(data);
     return newAct;
   },
-  updateActivity: async (id: string, subjectId: string, title: string, weight: number, description: string, skillId: string = '', applicationDate: string = '', mode: 'local' | 'remote' = 'local') => {
+  updateActivity: async (id: string, subjectId: string, title: string, weight: number, description: string, skillId: string = '', applicationDate: string = '', type: 'atividade' | 'prova' = 'atividade', mode: 'local' | 'remote' = 'local') => {
     if (mode === 'remote') {
-      await sql`UPDATE activities SET subject_id = ${subjectId}, title = ${title}, weight = ${weight}, description = ${description}, skill_id = ${skillId}, application_date = ${applicationDate} WHERE id = ${id}`;
-      return { id, subjectId, title, weight, description, skillId, applicationDate };
+      await sql`UPDATE activities SET subject_id = ${subjectId}, title = ${title}, weight = ${weight}, description = ${description}, skill_id = ${skillId}, application_date = ${applicationDate}, type = ${type} WHERE id = ${id}`;
+      return { id, subjectId, title, weight, description, skillId, applicationDate, type };
     }
     const data = readDB();
     const act = data.activities.find((a: any) => a.id === id);
@@ -262,9 +262,10 @@ export const db = {
       act.description = description; 
       act.skillId = skillId; 
       act.applicationDate = applicationDate;
+      act.type = type;
     }
     saveDB(data);
-    return { id, subjectId, title, weight, description, skillId, applicationDate };
+    return { id, subjectId, title, weight, description, skillId, applicationDate, type };
   },
   deleteActivity: async (id: string, mode: 'local' | 'remote' = 'local') => {
     if (mode === 'remote') { await sql`DELETE FROM activities WHERE id = ${id}`; return { id }; }

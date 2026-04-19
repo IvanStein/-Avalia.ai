@@ -63,10 +63,10 @@ export async function POST(req: NextRequest) {
         result = await db.updateStudentSubjects(data.id, data.subjectIds, mode);
         break;
       case 'activity':
-        result = await db.addActivity(data.subjectId, data.title, data.weight, data.description || '', data.skillId || '', mode);
+        result = await db.addActivity(data.subjectId, data.title, data.weight, data.description || '', data.skillId || '', data.applicationDate || '', data.type || 'atividade', mode);
         break;
       case 'activity-update':
-        result = await db.updateActivity(data.id, data.subjectId, data.title, data.weight, data.description || '', data.skillId || '', mode);
+        result = await db.updateActivity(data.id, data.subjectId, data.title, data.weight, data.description || '', data.skillId || '', data.applicationDate || '', data.type || 'atividade', mode);
         break;
       case 'implementacao':
         result = await db.addImplementacao(data.title, data.description, data.priority || 'media', data.category || '', data.imageUrl || '', mode);
