@@ -28,6 +28,7 @@ import { AuditView } from "./components/views/AuditView";
 import { BatchView } from "./components/views/BatchView";
 import { CanvasAssistantView } from "./components/views/CanvasAssistantView";
 import { ManualGradingView } from "./components/views/ManualGradingView";
+import { GradeEntryView } from "./components/views/GradeEntryView";
 import { CopyActivitiesView } from "./components/views/CopyActivitiesView";
 import { ReportsView } from "./components/views/ReportsView";
 import { StudentProfileView } from "./components/views/StudentProfileView";
@@ -947,6 +948,38 @@ export default function Dashboard() {
     } catch (e:any) { alert(e.message); }
     setManuSaving(false);
   };
+  
+  const handleSaveBulkGrades = async (bulkGrades: { studentName: string, grade: number, subject: string, activityTitle: string }[]) => {
+    try {
+      for (const entry of bulkGrades) {
+        const existing = dbData.submissions.find(s => 
+          s.studentName === entry.studentName && 
+          s.subject === entry.subject && 
+          getActName(s.feedback || '') === entry.activityTitle
+        );
+
+        const activityPrefix = `Atividade: ${entry.activityTitle}\n`;
+        const payload = {
+          studentName: entry.studentName,
+          subject: entry.subject,
+          status: "graded" as const,
+          grade: entry.grade,
+          feedback: activityPrefix + "Lançamento manual de nota.",
+          source: "manual",
+          submittedAt: new Date().toISOString().split("T")[0],
+        };
+
+        if (existing) {
+          await apiPost('submission-update', { id: existing.id, ...payload });
+        } else {
+          await apiPost('submission', payload);
+        }
+      }
+      await fetchDB();
+    } catch (e: any) {
+      throw e;
+    }
+  };
 
   const handleAuditRequest = async (id: string) => {
     try {
@@ -1303,6 +1336,15 @@ export default function Dashboard() {
             manuSaving={manuSaving}
             onSave={handleManualSave}
             onCancel={() => setView('dashboard')}
+          />
+        )}
+
+        {view === 'grade-entry' && (
+          <GradeEntryView 
+            dbData={dbData}
+            onSaveGrades={handleSaveBulkGrades}
+            getStatusConfig={getStatusConfig}
+            getActName={getActName}
           />
         )}
 

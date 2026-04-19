@@ -80,7 +80,7 @@ export interface AppConfig {
   system_name?: string;
 }
 
-export type View = 'dashboard' | 'subjects' | 'students' | 'enrollment' | 'activities' | 'batch' | 'audit' | 'reports' | 'implementacoes' | 'settings' | 'skills' | 'manual' | 'canvas' | 'copy' | 'student-profile';
+export type View = 'dashboard' | 'subjects' | 'students' | 'enrollment' | 'activities' | 'batch' | 'audit' | 'reports' | 'implementacoes' | 'settings' | 'skills' | 'manual' | 'canvas' | 'copy' | 'student-profile' | 'grade-entry';
 
 export interface DBData {
   subjects: Subject[];
