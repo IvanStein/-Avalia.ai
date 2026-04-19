@@ -112,17 +112,18 @@ export function GradeEntryView({
         </div>
       </header>
 
-      <div className="card" style={{ marginBottom: 24, padding: 24 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-          <div className="field-group">
-            <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <BookOpen size={14} /> Matéria
+      <div className="card" style={{ marginBottom: 24, padding: '32px 24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 0 }}>
+              <BookOpen size={15} color="var(--accent)" /> 
+              <span style={{ fontWeight: 600, color: 'var(--text)' }}>Matéria</span>
             </label>
             <select 
               className="input" 
               value={selectedSubId} 
               onChange={e => { setSelectedSubId(e.target.value); setSelectedActId(''); }}
-              style={{ height: 48 }}
+              style={{ height: 48, fontSize: '14px' }}
             >
               <option value="">Selecione a Matéria...</option>
               {dbData.subjects.sort((a,b) => a.name.localeCompare(b.name)).map(s => (
@@ -131,16 +132,17 @@ export function GradeEntryView({
             </select>
           </div>
 
-          <div className="field-group">
-            <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Clock size={14} /> Atividade / Prova
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 0 }}>
+              <Clock size={15} color="var(--accent)" />
+              <span style={{ fontWeight: 600, color: 'var(--text)' }}>Atividade / Prova</span>
             </label>
             <select 
               className="input" 
               value={selectedActId} 
               onChange={e => setSelectedActId(e.target.value)}
               disabled={!selectedSubId}
-              style={{ height: 48 }}
+              style={{ height: 48, fontSize: '14px' }}
             >
               <option value="">Selecione a Atividade...</option>
               {activitiesInSubject.map(a => (
