@@ -29,10 +29,10 @@ export function GradeEntryView({
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [selectedSubId, dbData.students]);
 
-  // Filter activities by selected subject
+  // Filter activities by selected subject (only PROVAS)
   const activitiesInSubject = useMemo(() => {
     if (!selectedSubId) return [];
-    return dbData.activities.filter(a => a.subjectId === selectedSubId);
+    return dbData.activities.filter(a => a.subjectId === selectedSubId && a.type === 'prova');
   }, [selectedSubId, dbData.activities]);
 
   const selectedSubject = useMemo(() => {
@@ -176,7 +176,10 @@ export function GradeEntryView({
               disabled={!selectedSubId}
               style={{ height: 48, fontSize: '14px' }}
             >
-              <option value="">Selecione a Avaliação...</option>
+              <option value="">Selecione a Prova...</option>
+              {selectedSubId && activitiesInSubject.length === 0 && (
+                <option value="" disabled>Nenhuma prova cadastrada para esta matéria</option>
+              )}
               {activitiesInSubject.map(a => (
                 <option key={a.id} value={a.id}>{a.title}</option>
               ))}

@@ -36,7 +36,12 @@ export function ActivitiesView({
                 const sub = subjects.find(s => s.id === a.subjectId);
                 return (
                   <tr key={a.id}>
-                    <td className="td-name">{a.title}</td>
+                    <td className="td-name">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {a.title}
+                        {a.type === 'prova' && <span className="badge badge-red" style={{ fontSize: 9, padding: '2px 6px' }}>PROVA</span>}
+                      </div>
+                    </td>
                     <td><span className="badge-subject">{sub?.name ?? a.subjectId}</span></td>
                     <td className="td-muted" style={{fontSize:12}}>{a.applicationDate || <span style={{opacity:.4}}>Não def.</span>}</td>
                     <td className="td-muted">{a.weight}×</td>

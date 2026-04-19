@@ -158,7 +158,7 @@ export default function Dashboard() {
   const [syllabusTarget, setSyllabusTarget] = useState<Subject | null>(null);
 
   const [newStuData, setNewStuData] = useState({ name: '', email: '', ra: '', turma: '' });
-  const [newActData, setNewActData] = useState({ subjectId: '', title: '', weight: 1, description: '', skillId: '', applicationDate: '' });
+  const [newActData, setNewActData] = useState({ subjectId: '', title: '', weight: 1, description: '', skillId: '', applicationDate: '', type: 'atividade' as 'atividade' | 'prova' });
   const [newSkillData, setNewSkillData] = useState({ name: '', description: '', promptTemplate: '', model: 'gemini-1.5-flash', responseType: 'text' });
   const [newImpl, setNewImpl] = useState({ title: '', description: '', priority: 'media', category: '', imageUrl: '' });
   const [tempConfigs, setTempConfigs] = useState<AppConfig>(EMPTY_DB.configs);
@@ -623,7 +623,8 @@ export default function Dashboard() {
         weight: a.weight, 
         description: a.description || '', 
         skillId: a.skillId || '',
-        applicationDate: a.applicationDate || ''
+        applicationDate: a.applicationDate || '',
+        type: a.type || 'atividade'
       }); 
     }
     else { 
@@ -634,7 +635,8 @@ export default function Dashboard() {
         weight: 1, 
         description: '', 
         skillId: '',
-        applicationDate: ''
+        applicationDate: '',
+        type: 'atividade'
       }); 
     }
     setShowActivityModal(true);
@@ -1728,8 +1730,19 @@ export default function Dashboard() {
                 <input className="input" placeholder="dd/mm/aaaa" value={newActData.applicationDate} onChange={e => setNewActData({...newActData, applicationDate: e.target.value})}/>
               </div>
             </div>
-            <label className="field-label">Peso</label>
-            <input className="input" type="number" step="0.1" value={newActData.weight} onChange={e => setNewActData({...newActData, weight: parseFloat(e.target.value)})}/>
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12}}>
+              <div>
+                <label className="field-label">Peso</label>
+                <input className="input" type="number" step="0.1" value={newActData.weight} onChange={e => setNewActData({...newActData, weight: parseFloat(e.target.value)})}/>
+              </div>
+              <div>
+                <label className="field-label">Tipo de Avaliação</label>
+                <select className="input" value={newActData.type} onChange={e => setNewActData({...newActData, type: e.target.value as 'atividade' | 'prova'})}>
+                  <option value="atividade">Atividade Normal</option>
+                  <option value="prova">Prova (Direta)</option>
+                </select>
+              </div>
+            </div>
             <label className="field-label">Habilidade AI de Correção</label>
             <select className="input" value={newActData.skillId} onChange={e => setNewActData({...newActData, skillId: e.target.value})}>
               <option value="">Padrão (Dissertativa)</option>
