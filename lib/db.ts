@@ -51,6 +51,7 @@ async function initPostgres() {
       await sql`CREATE TABLE IF NOT EXISTS activities (id TEXT PRIMARY KEY, subject_id TEXT, title TEXT, weight FLOAT, description TEXT, skill_id TEXT, application_date TEXT)`;
       try { await sql`ALTER TABLE activities ADD COLUMN skill_id TEXT`; } catch(e){}
       try { await sql`ALTER TABLE activities ADD COLUMN application_date TEXT`; } catch(e){}
+      try { await sql`ALTER TABLE activities ADD COLUMN type TEXT`; } catch(e){}
       await sql`CREATE TABLE IF NOT EXISTS implementacoes (id TEXT PRIMARY KEY, title TEXT, description TEXT, status TEXT, priority TEXT, created_at TEXT, category TEXT, image_url TEXT)`;
       try { await sql`ALTER TABLE implementacoes ADD COLUMN category TEXT`; } catch(e){}
       try { await sql`ALTER TABLE implementacoes ADD COLUMN image_url TEXT`; } catch(e){}
