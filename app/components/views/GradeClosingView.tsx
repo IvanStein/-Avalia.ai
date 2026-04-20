@@ -80,7 +80,9 @@ export function GradeClosingView({ dbData, getActName }: GradeClosingViewProps) 
         (getActName(subm.feedback || '') === provaTitle)
       );
       const provaRawGrade = provaSubm?.grade || 0;
-      const provaContribution = provaRawGrade * 0.7; // 70% da Prova (Multiplicado por 0.7)
+      // Normalize grade (in case it was entered as 0-100 instead of 0-10)
+      const normalizedProvaGrade = provaRawGrade > 10 ? provaRawGrade / 10 : provaRawGrade;
+      const provaContribution = normalizedProvaGrade * 0.7; // 70% da Prova (Multiplicado por 0.7)
 
       // Find Base Deliveries
       let baseDelivered = 0;
@@ -105,7 +107,8 @@ export function GradeClosingView({ dbData, getActName }: GradeClosingViewProps) 
       });
       const extraContribution = extraDelivered > 0 ? 1.5 : 0; // Quem entregou ganha 1.5
 
-      const finalGrade = Math.min(10.0, provaContribution + baseContribution + extraContribution);
+      const rawFinal = Math.min(10.0, provaContribution + baseContribution + extraContribution);
+      const finalGrade = Math.round(rawFinal * 2) / 2; // Arredonda para o 0.5 mais próximo
 
       return {
         student: stu.name,
