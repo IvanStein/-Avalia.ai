@@ -56,13 +56,21 @@ export function GradeClosingView({ dbData, getActName }: GradeClosingViewProps) 
   }, [selectedSubId, activitiesInSubject]);
 
   const toggleBaseAct = (id: string) => {
-    if (selectedBaseActIds.includes(id)) setSelectedBaseActIds(prev => prev.filter(x => x !== id));
-    else setSelectedBaseActIds(prev => [...prev, id]);
+    if (selectedBaseActIds.includes(id)) {
+      setSelectedBaseActIds(prev => prev.filter(x => x !== id));
+    } else {
+      setSelectedBaseActIds(prev => [...prev, id]);
+      setSelectedExtraActIds(prev => prev.filter(x => x !== id)); // Remove da outra listagem
+    }
   };
 
   const toggleExtraAct = (id: string) => {
-    if (selectedExtraActIds.includes(id)) setSelectedExtraActIds(prev => prev.filter(x => x !== id));
-    else setSelectedExtraActIds(prev => [...prev, id]);
+    if (selectedExtraActIds.includes(id)) {
+      setSelectedExtraActIds(prev => prev.filter(x => x !== id));
+    } else {
+      setSelectedExtraActIds(prev => [...prev, id]);
+      setSelectedBaseActIds(prev => prev.filter(x => x !== id)); // Remove da outra listagem
+    }
   };
 
   // Calculate closure row for each student
@@ -253,26 +261,26 @@ export function GradeClosingView({ dbData, getActName }: GradeClosingViewProps) 
                <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Atividades Assíncronas (Máx 1.5 pts)</h4>
                <p style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 8 }}>Será descontado proporcional a cada não entregue.</p>
                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 150, overflowY: 'auto' }}>
-                 {activitiesInSubject.filter(a => a.type !== 'prova').map(a => (
+                 {activitiesInSubject.filter(a => a.type !== 'prova' && !selectedExtraActIds.includes(a.id)).map(a => (
                    <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer' }}>
                      <input type="checkbox" checked={selectedBaseActIds.includes(a.id)} onChange={() => toggleBaseAct(a.id)} />
                      {a.title}
                    </label>
                  ))}
-                 {activitiesInSubject.filter(a => a.type !== 'prova').length === 0 && <span style={{ fontSize: 12, color: 'var(--text2)' }}>Nenhuma atividade encontrada</span>}
+                 {activitiesInSubject.filter(a => a.type !== 'prova' && !selectedExtraActIds.includes(a.id)).length === 0 && <span style={{ fontSize: 12, color: 'var(--text2)' }}>Nenhuma atividade</span>}
                </div>
             </div>
             <div>
                <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Atividades Extras (1.5 pts caso entregue alguma)</h4>
                <p style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 8 }}>Qualquer entrega nessas atividades concederá +1.5 na média.</p>
                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 150, overflowY: 'auto' }}>
-                 {activitiesInSubject.filter(a => a.type !== 'prova').map(a => (
+                 {activitiesInSubject.filter(a => a.type !== 'prova' && !selectedBaseActIds.includes(a.id)).map(a => (
                    <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer' }}>
                      <input type="checkbox" checked={selectedExtraActIds.includes(a.id)} onChange={() => toggleExtraAct(a.id)} />
                      {a.title}
                    </label>
                  ))}
-                 {activitiesInSubject.filter(a => a.type !== 'prova').length === 0 && <span style={{ fontSize: 12, color: 'var(--text2)' }}>Nenhuma atividade encontrada</span>}
+                 {activitiesInSubject.filter(a => a.type !== 'prova' && !selectedBaseActIds.includes(a.id)).length === 0 && <span style={{ fontSize: 12, color: 'var(--text2)' }}>Nenhuma atividade</span>}
                </div>
             </div>
           </div>
