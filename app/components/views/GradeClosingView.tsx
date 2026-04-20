@@ -211,7 +211,7 @@ export function GradeClosingView({ dbData, getActName }: GradeClosingViewProps) 
                 <th style={{ width: '15%' }}>Prova (10.0)<br/><span style={{fontSize:9, opacity:0.6}}>Valor Bruto</span></th>
                 <th style={{ width: '15%' }}>Parte Prova<br/><span style={{fontSize:9, opacity:0.6}}> Bruto × 0.7</span></th>
                 <th style={{ width: '15%' }}>Assíncronas<br/><span style={{fontSize:9, opacity:0.6}}>Entregas ({selectedBaseActIds.length})</span></th>
-                <th style={{ width: '15%' }}>Extras<br/><span style={{fontSize:9, opacity:0.6}}>+{selectedExtraActIds.length ? '1.5' : '0.0'} se > 0</span></th>
+                <th style={{ width: '15%' }}>Extras<br/><span style={{fontSize:9, opacity:0.6}}>+{selectedExtraActIds.length ? '1.5' : '0.0'} se &gt; 0</span></th>
                 <th style={{ width: '15%', textAlign: 'right' }}>Média Final<br/><span style={{fontSize:9, opacity:0.6}}>Max 10.0</span></th>
               </tr>
             </thead>
