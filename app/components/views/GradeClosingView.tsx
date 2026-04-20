@@ -127,6 +127,7 @@ export function GradeClosingView({ dbData, getActName, onSaveClosing }: GradeClo
         baseTotal: baseTitles.length,
         baseContribution,
         extraDelivered,
+        extraTotal: extraTitles.length,
         extraContribution,
         finalGrade
       };
@@ -184,7 +185,7 @@ export function GradeClosingView({ dbData, getActName, onSaveClosing }: GradeClo
           <td class="center">${row.provaRawGrade.toFixed(1)}</td>
           <td class="center">+${row.provaContribution.toFixed(2)}</td>
           <td class="center">${row.baseDelivered}/${row.baseTotal} (+${row.baseContribution.toFixed(2)})</td>
-          <td class="center">${row.extraDelivered} (+${row.extraContribution.toFixed(2)})</td>
+          <td class="center">${row.extraDelivered}/${row.extraTotal} (+${row.extraContribution.toFixed(2)})</td>
           <td class="right final ${row.finalGrade >= 6.0 ? 'pass' : 'fail'}">${row.finalGrade.toFixed(1)}</td>
         </tr>
       `;
@@ -340,7 +341,7 @@ export function GradeClosingView({ dbData, getActName, onSaveClosing }: GradeClo
                   </td>
                   <td>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                       <span style={{ fontSize: 13 }}>{row.extraDelivered} ent.</span>
+                       <span style={{ fontSize: 13 }}>{row.extraDelivered} / {row.extraTotal} ent.</span>
                        <span className="badge badge-accent" style={{ width: 'fit-content', fontSize: 10 }}>+{row.extraContribution.toFixed(2)} pts</span>
                     </div>
                   </td>
