@@ -1475,6 +1475,25 @@ export default function Dashboard() {
           <GradeClosingView
             dbData={dbData}
             getActName={getActName}
+            onSaveClosing={async (title, subjectId, gradesList) => {
+              await apiPost('activity-add', {
+                subjectId,
+                title,
+                weight: 1,
+                type: 'fechamento',
+                applicationDate: new Date().toISOString().split('T')[0]
+              });
+              for (const g of gradesList) {
+                  await apiPost('submission-add', {
+                    studentName: g.studentName,
+                    subject: g.subject,
+                    grade: g.grade,
+                    feedback: `Atividade: ${title}\n\nFechamento de notas processado automaticamente pelo sistema.`,
+                    status: 'graded'
+                  });
+              }
+              await fetchDB();
+            }}
           />
         )}
 

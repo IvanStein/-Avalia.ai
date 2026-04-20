@@ -23,7 +23,7 @@ export interface Activity {
   description?: string;
   skillId?: string;
   applicationDate?: string;
-  type?: 'atividade' | 'prova';
+  type?: 'atividade' | 'prova' | 'fechamento';
 }
 
 export interface Submission {

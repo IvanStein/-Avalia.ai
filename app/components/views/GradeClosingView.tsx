@@ -1,13 +1,14 @@
 import React, { useState, useMemo } from "react";
-import { BookOpen, Calculator, CheckCircle, AlertCircle, Printer } from "lucide-react";
+import { BookOpen, Calculator, CheckCircle, AlertCircle, Printer, Save } from "lucide-react";
 import { DBData, Activity } from "@/lib/types";
 
 interface GradeClosingViewProps {
   dbData: DBData;
   getActName: (feedback: string) => string | null;
+  onSaveClosing: (title: string, subjectId: string, grades: { studentName: string; grade: number; subject: string }[]) => Promise<void>;
 }
 
-export function GradeClosingView({ dbData, getActName }: GradeClosingViewProps) {
+export function GradeClosingView({ dbData, getActName, onSaveClosing }: GradeClosingViewProps) {
   const [selectedSubId, setSelectedSubId] = useState<string>('');
 
   const selectedSubject = useMemo(() => dbData.subjects.find(s => s.id === selectedSubId), [selectedSubId, dbData.subjects]);
@@ -201,6 +202,26 @@ export function GradeClosingView({ dbData, getActName }: GradeClosingViewProps) 
     win.document.close();
   };
 
+  const handleSaveToDB = async () => {
+    if (!selectedSubId || !selectedSubject || closureData.length === 0) return;
+    const title = window.prompt("Digite o nome desse fechamento para gravar no histórico (Ex: Fechamento 1º Bimestre):", "Fechamento 1º Bimestre");
+    if (!title) return; // cancelled
+
+    if (!window.confirm(`Tem certeza que deseja gravar permanentemente a nota final de ${closureData.length} alunos sob a atividade "${title}"?`)) return;
+
+    try {
+      const payload = closureData.map(row => ({
+        studentName: row.student,
+        grade: row.finalGrade,
+        subject: selectedSubject.name
+      }));
+      await onSaveClosing(title, selectedSubId, payload);
+      alert("Fechamento registrado com sucesso no histórico de atividades!");
+    } catch (e: any) {
+      alert("Erro ao salvar fechamento: " + e.message);
+    }
+  };
+
   return (
     <div className="fade-in">
       <header className="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -209,9 +230,14 @@ export function GradeClosingView({ dbData, getActName }: GradeClosingViewProps) 
           <p className="subtitle">Conferência e cálculo de médias usando o método de pesos fixos</p>
         </div>
         {selectedSubId && closureData.length > 0 && (
-          <button className="btn" onClick={handlePrint}>
-            <Printer size={16} /> Imprimir em PDF
-          </button>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <button className="btn-ghost" onClick={handlePrint} style={{ padding: '0 16px' }}>
+              <Printer size={16} style={{ marginRight: 6 }}/> Imprimir em PDF
+            </button>
+            <button className="btn" onClick={handleSaveToDB}>
+              <Save size={16} /> Gravar no Diário
+            </button>
+          </div>
         )}
       </header>
 
@@ -331,9 +357,12 @@ export function GradeClosingView({ dbData, getActName }: GradeClosingViewProps) 
       )}
 
       {selectedSubId && closureData.length > 0 && (
-        <div style={{ padding: '24px', display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border)' }}>
-          <button className="btn" onClick={handlePrint}>
-            <Printer size={16} /> Imprimir Relatório Final em PDF
+        <div style={{ padding: '24px', display: 'flex', gap: 12, justifyContent: 'flex-end', borderTop: '1px solid var(--border)' }}>
+          <button className="btn-ghost" onClick={handlePrint}>
+            <Printer size={16} style={{ marginRight: 6 }}/> Imprimir em PDF
+          </button>
+          <button className="btn" onClick={handleSaveToDB}>
+            <Save size={16} /> Gravar Resultado no Diário
           </button>
         </div>
       )}
