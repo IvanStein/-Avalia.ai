@@ -159,7 +159,7 @@ export default function Dashboard() {
   const [syllabusTarget, setSyllabusTarget] = useState<Subject | null>(null);
 
   const [newStuData, setNewStuData] = useState({ name: '', email: '', ra: '', turma: '' });
-  const [newActData, setNewActData] = useState({ subjectId: '', title: '', weight: 1, description: '', skillId: '', applicationDate: '', type: 'atividade' as 'atividade' | 'prova' });
+  const [newActData, setNewActData] = useState({ subjectId: '', title: '', weight: 1, description: '', skillId: '', applicationDate: '', type: 'atividade' as 'atividade' | 'prova' | 'fechamento' });
   const [newSkillData, setNewSkillData] = useState({ name: '', description: '', promptTemplate: '', model: 'gemini-1.5-flash', responseType: 'text' });
   const [newImpl, setNewImpl] = useState({ title: '', description: '', priority: 'media', category: '', imageUrl: '' });
   const [tempConfigs, setTempConfigs] = useState<AppConfig>(EMPTY_DB.configs);
