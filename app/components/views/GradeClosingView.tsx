@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { BookOpen, Calculator, CheckCircle, AlertCircle } from "lucide-react";
+import { BookOpen, Calculator, CheckCircle, AlertCircle, Printer } from "lucide-react";
 import { DBData, Activity } from "@/lib/types";
 
 interface GradeClosingViewProps {
@@ -124,13 +124,87 @@ export function GradeClosingView({ dbData, getActName }: GradeClosingViewProps) 
     });
   }, [selectedSubId, selectedSubject, studentsInSubject, dbData.activities, dbData.submissions, selectedProvaId, selectedBaseActIds, selectedExtraActIds, getActName]);
 
+  const handlePrint = () => {
+    const win = window.open("", "_blank");
+    if (!win) return;
+    
+    let html = `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8"/>
+        <title>Fechamento – ${selectedSubject?.name}</title>
+        <style>
+          body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 40px; color: #111827; }
+          h1 { font-size: 24px; margin-bottom: 4px; }
+          h2 { font-size: 14px; font-weight: normal; color: #4B5563; margin-top: 0; margin-bottom: 30px; border-bottom: 1px solid #E5E7EB; padding-bottom: 16px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 13px; }
+          th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #E5E7EB; }
+          th { background: #F9FAFB; font-weight: 600; color: #374151; }
+          .right { text-align: right; }
+          .center { text-align: center; }
+          .final { font-weight: bold; font-size: 15px; }
+          .pass { color: #059669; }
+          .fail { color: #DC2626; }
+          .footer { margin-top: 40px; font-size: 11px; color: #6B7280; text-align: center; }
+          @media print { body { margin: 20px; } }
+        </style>
+      </head>
+      <body>
+        <h1>Relatório de Fechamento de Notas</h1>
+        <h2>Matéria: ${selectedSubject?.name || 'Não Selecionada'} | Gerado em: ${new Date().toLocaleDateString("pt-BR")}</h2>
+        
+        <table>
+          <thead>
+            <tr>
+              <th>Aluno</th>
+              <th class="center">Prova (Bruto)</th>
+              <th class="center">Parte Prova</th>
+              <th class="center">Assíncronas</th>
+              <th class="center">Extras</th>
+              <th class="right">Média Final</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+
+    closureData.forEach(row => {
+      html += `
+        <tr>
+          <td>${row.student}</td>
+          <td class="center">${row.provaRawGrade.toFixed(1)}</td>
+          <td class="center">+${row.provaContribution.toFixed(2)}</td>
+          <td class="center">${row.baseDelivered}/${row.baseTotal} (+${row.baseContribution.toFixed(2)})</td>
+          <td class="center">${row.extraDelivered} (+${row.extraContribution.toFixed(2)})</td>
+          <td class="right final ${row.finalGrade >= 6.0 ? 'pass' : 'fail'}">${row.finalGrade.toFixed(1)}</td>
+        </tr>
+      `;
+    });
+
+    html += `
+          </tbody>
+        </table>
+        <div class="footer">Gerado por Aval.IA</div>
+        <script>window.onload = () => { window.print(); window.close(); }<\/script>
+      </body>
+      </html>
+    `;
+    win.document.write(html);
+    win.document.close();
+  };
+
   return (
     <div className="fade-in">
-      <header className="header">
+      <header className="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1>Fechamento do Bimestre</h1>
           <p className="subtitle">Conferência e cálculo de médias usando o método de pesos fixos</p>
         </div>
+        {selectedSubId && closureData.length > 0 && (
+          <button className="btn" onClick={handlePrint}>
+            <Printer size={16} /> Imprimir em PDF
+          </button>
+        )}
       </header>
 
       <div className="card" style={{ marginBottom: 24, padding: '24px', borderLeft: '4px solid var(--accent)' }}>
@@ -245,6 +319,14 @@ export function GradeClosingView({ dbData, getActName }: GradeClosingViewProps) 
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {selectedSubId && closureData.length > 0 && (
+        <div style={{ padding: '24px', display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border)' }}>
+          <button className="btn" onClick={handlePrint}>
+            <Printer size={16} /> Imprimir Relatório Final em PDF
+          </button>
         </div>
       )}
     </div>
