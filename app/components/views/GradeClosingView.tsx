@@ -117,7 +117,7 @@ export function GradeClosingView({ dbData, getActName, onSaveClosing }: GradeClo
       const extraContribution = extraDelivered > 0 ? 1.5 : 0; // Quem entregou ganha 1.5
 
       const rawFinal = Math.min(10.0, provaContribution + baseContribution + extraContribution);
-      const finalGrade = Math.round(rawFinal * 2) / 2; // Arredonda para o 0.5 mais próximo
+      const finalGrade = Math.round(rawFinal * 100) / 100; // Sem arredondamento brutal, usa precisão de 2 decimais
 
       return {
         student: stu.name,
@@ -186,7 +186,7 @@ export function GradeClosingView({ dbData, getActName, onSaveClosing }: GradeClo
           <td class="center">+${row.provaContribution.toFixed(2)}</td>
           <td class="center">${row.baseDelivered}/${row.baseTotal} (+${row.baseContribution.toFixed(2)})</td>
           <td class="center">${row.extraDelivered}/${row.extraTotal} (+${row.extraContribution.toFixed(2)})</td>
-          <td class="right final ${row.finalGrade >= 6.0 ? 'pass' : 'fail'}">${row.finalGrade.toFixed(1)}</td>
+          <td class="right final ${row.finalGrade >= 6.0 ? 'pass' : 'fail'}">${row.finalGrade.toFixed(2)}</td>
         </tr>
       `;
     });
@@ -347,7 +347,7 @@ export function GradeClosingView({ dbData, getActName, onSaveClosing }: GradeClo
                   </td>
                   <td style={{ textAlign: 'right' }}>
                     <span style={{ fontWeight: 700, fontSize: 15, color: row.finalGrade >= 6.0 ? 'var(--neon)' : 'var(--error)' }}>
-                      {row.finalGrade.toFixed(1)}
+                      {row.finalGrade.toFixed(2)}
                     </span>
                   </td>
                 </tr>
